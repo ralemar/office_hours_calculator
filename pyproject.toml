@@ -1,0 +1,21 @@
+[project]
+name = "0920-calendar-reader"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Raul Alegre", email = "raul.alemar@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+0920-calendar-reader = "0920_calendar_reader:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+
+[tool.uv]
+preview-features = ["centralized-project-envs"]
