@@ -2,142 +2,144 @@
 
 ## Objetivo
 
-Crear una CLI que, dado un fichero `.ics` y dos fechas (`desde`, `hasta`), liste
-los eventos comprendidos en ese rango y muestre para cada uno:
+Leer un fichero `.ics` y, dadas dos fechas (`desde`, `hasta`), devolver los
+eventos comprendidos en ese rango con estos datos:
 
 - Nombre del evento
 - Fecha
 - Hora de inicio
 - Hora final
-- Duración (en horas)
+- Duracion (en horas)
 
-Estado de partida: proyecto `uv` con layout `src/`, paquete
-`src/0920_calendar_reader/` y entrypoint `0920-calendar-reader` ya declarado en
-`pyproject.toml`. Solo contiene un `main()` de ejemplo.
+El resultado lo consumira un script manual de pruebas y, en el futuro, una
+webapp sencilla. Por eso **no hay CLI**: la logica se expone como una funcion
+reutilizable.
 
-## Decisiones tecnicas
+## Decisiones cerradas
 
-- **Libreria ICS:** `icalendar` para parsear el fichero. Maneja el plegado de
-  lineas, propiedades `DTSTART`/`DTEND`/`DURATION`, zonas horarias (`TZID`) y
-  fechas de dia completo. Alternativa a considerar: `recurring-ical-events`
-  para expandir eventos recurrentes (`RRULE`).
-- **Fechas de argumentos:** `datetime.date.fromisoformat` para aceptar
-  `YYYY-MM-DD`. Sin dependencias extra de parseo.
-- **CLI:** `argparse` de la libreria estandar (no anadir `click`/`typer` salvo
-  que se pida).
-- **Salida:** tabla legible por defecto y opcion `--csv` para exportar.
+- **Libreria ICS:** `icalendar`, unica dependencia. No hay eventos recurrentes
+  (`RRULE`) ni eventos de dia completo, asi que no hacen falta librerias extra.
+- **Sin CLI:** se elimino el entrypoint `[project.scripts]` de `pyproject.toml`.
+- **Codigo minimo:** sin dataclasses ni capas innecesarias; el evento es un
+  `dict` plano.
+- **Zonas horarias:** el `.ics` real guarda las horas en UTC (`Z`), aunque el
+  calendario sea de Madrid. Se convierten a **`Europe/Madrid`** con
+  `ZoneInfo("Europe/Madrid")` antes de filtrar y mostrar. En Windows, `tzdata`
+  entra como dependencia de `icalendar`, asi que no se anade nada extra.
+- **Sin tests automaticos en esta fase:** la comprobacion se hace con un script
+  manual sobre un `.ics` real.
 
-## Estructura propuesta
+## Renombrado del proyecto
+
+- Nombre de distribucion: **`calendar-reader`**.
+- Paquete: **`calendar_reader`** (carpeta `src/calendar_reader/`).
+- `pyproject.toml`: `name = "calendar-reader"`, sin `[project.scripts]`,
+  descripcion actualizada.
+- Lockfile regenerado con `uv lock`.
+
+## Estructura final
 
 ```
-src/0920_calendar_reader/
-├── __init__.py        # main() -> solo orquesta
-├── cli.py             # parseo de argumentos y salida
-├── events.py          # lectura del ICS y normalizacion de eventos
-└── models.py          # dataclass Evento
+pyproject.toml
+uv.lock
+README.md
+PLAN.md
+src/
+└── calendar_reader/
+    └── __init__.py              # funcion leer_eventos()
 tests/
-├── test_events.py
-└── fixtures/agenda.ics
+└── fixtures/
+    └── calendario_test.ics      # calendario real de prueba
+scripts/
+└── probar_calendario.py         # script manual de volcado
 ```
 
-## Modelo de datos
+- `tests/` es la carpeta que busca `pytest`; aqui solo viven datos en
+  `tests/fixtures/`. Los futuros test iran como `tests/test_*.py`.
+- `scripts/` alberga utilidades de desarrollo que se ejecutan a mano.
 
-`models.py`
+## API publica
+
+`src/calendar_reader/__init__.py`
 
 ```python
-@dataclass(frozen=True)
-class Evento:
-    nombre: str
-    fecha: date
-    inicio: datetime | None
-    fin: datetime | None
-    duracion_horas: float
+def leer_eventos(ruta, desde, hasta) -> list[dict]:
+    ...
 ```
 
-- Eventos de dia completo (`VALUE=DATE`): `inicio`/`fin` a `None`, fecha bruta,
-  duracion en dias u horas equivalentes (decidir y documentar).
-- Eventos con `DURATION` en vez de `DTEND`: calcular `fin = inicio + duration`.
+- `ruta`: `str | Path` al fichero `.ics`.
+- `desde`, `hasta`: `datetime.date`.
+- Devuelve una lista de `dict`, ordenada por fecha y hora de inicio.
+
+### Esquema de cada evento
+
+| clave | tipo | descripcion |
+|---|---|---|
+| `nombre` | `str` | `SUMMARY` del evento |
+| `fecha` | `datetime.date` | fecha de inicio (en Madrid) |
+| `inicio` | `datetime.time` | hora de inicio (en Madrid) |
+| `fin` | `datetime.datetime` | fecha y hora finales (en Madrid) |
+| `duracion_horas` | `float` | `(fin - inicio)` en horas |
+
+`fin` se devuelve como `datetime` completo para no perder los eventos que
+terminan despues de medianoche (p. ej. `Evento test 3`). `inicio` se mantiene
+como `time` porque su fecha ya esta en `fecha`.
+
+## Logica de la funcion
+
+1. Abrir el fichero y parsearlo con `icalendar.Calendar.from_ical(...)`.
+2. Recorrer los componentes `VEVENT`.
+3. Para cada evento extraer `SUMMARY`, `DTSTART` y `DTEND`.
+4. Convertir `DTSTART`/`DTEND` a `Europe/Madrid` con `.astimezone(MADRID)`.
+5. Filtrar: incluir solo si `desde <= inicio.date() <= hasta`
+   (rango inclusivo, de 00:00 del dia inicial a 23:59 del dia final).
+   El filtrado se basa en la fecha de inicio, no en el solape.
+6. Calcular `duracion_horas = (fin - inicio).total_seconds() / 3600`.
+7. Ordenar por `(fecha, inicio)`.
+8. Devolver la lista de `dict`.
+
+## Casos limite: como se tratan
+
+- **Falta `DTEND` (y no hay `DURATION`):** se asume `fin = inicio`, es decir,
+  duracion `0.0`. Se emite un `warnings.warn(...)` avisando del evento. No se
+  interrumpe la ejecucion.
+- **`DURATION` en lugar de `DTEND`:** `icalendar` ya lo expone; si aparece, se
+  resuelve con `inicio + duration` para obtener `fin`.
+- **Falta `SUMMARY`:** se usa cadena vacia `""` como nombre.
+- **Eventos sin hora (dia completo):** fuera de alcance por decision explicita;
+  no se contemplan.
+- **Recurrencias (`RRULE`):** fuera de alcance; solo se lee la primera
+  ocurrencia que aparezca en el `VEVENT`.
+- **Zonas horarias:** se convierten a `Europe/Madrid` (ver "Decisiones
+  cerradas").
 
 ## Pasos de implementacion
 
-1. **Anadir dependencia**
-   - `uv add icalendar`
-   - Verificar que se actualiza `pyproject.toml` y `uv.lock`.
+Ejecutados:
 
-2. **Crear `models.py`**
-   - Definir la dataclass `Evento` y, si procede, un `__str__`/formato de fila.
+1. **Renombrar** paquete y proyecto; quitar `[project.scripts]`; `uv lock`.
+2. **Anadir dependencia:** `uv add icalendar`.
+3. **Implementar `leer_eventos`** en `src/calendar_reader/__init__.py`.
+4. **Dato de prueba:** mover el `.ics` a `tests/fixtures/calendario_test.ics`.
+5. **Script manual:** crear `scripts/probar_calendario.py`, que llama a
+   `leer_eventos` con el `.ics` de fixtures y lo imprime.
+6. **Documentacion:** `README.md` con la firma, ejemplo de uso y limitaciones.
 
-3. **Crear `events.py`**
-   - `leer_calendario(ruta: Path) -> list[Evento]`
-   - Recorrer componentes `VEVENT` con `Calendar.from_ical(...)`.
-   - Normalizar:
-     - `DTSTART`/`DTEND` a `datetime` con zona (o `date` si dia completo).
-     - Si hay fecha+hora, construir `datetime`; si la hora es 00:00 y es
-       dia completo, tratar como evento de todo el dia.
-     - Resolver `DURATION` cuando falta `DTEND`.
-     - Si falta `DTEND`, asumir fin = inicio (duracion 0) y avisar.
-   - Filtrar por rango: solape con `[desde 00:00, hasta 23:59:59]`.
-   - Calcular `duracion_horas = (fin - inicio).total_seconds() / 3600`.
-   - Ordenar por fecha y hora de inicio.
-   - Gestionar errores: fichero inexistente, ICS invalido, sin `VEVENT`.
+Pendiente:
 
-4. **Crear `cli.py`**
-   - `argparse`:
-     - posicional `ics` (ruta).
-     - posicional `desde`, `hasta` (ISO `YYYY-MM-DD`).
-     - opcional `--csv` (salida CSV) y `--encoding`.
-   - Validar `desde <= hasta`; si no, error claro y `sys.exit(2)`.
-   - Formatear la tabla con anchos alineados (sin dependencias) o `csv` stdlib
-     para el modo exportacion.
-   - Encabezados: `Evento | Fecha | Inicio | Fin | Duracion (h)`.
+7. **Ejecutar el script** contra el `.ics` real para validar la salida.
+   `uv run python scripts/probar_calendario.py`
 
-5. **Recablear `__init__.py`**
-   - `main()` llama a `cli.main()` para mantener el entrypoint
-     `0920-calendar-reader = "0920_calendar_reader:main"`.
+## Fuera de alcance
 
-6. **Tests**
-   - `tests/fixtures/agenda.ics` con casos: evento normal, evento de dia
-     completo, evento con `DURATION`, evento fuera de rango, `TZID` distinto.
-   - `test_events.py`: filtrado, calculo de duracion, orden.
-   - Probar manualmente:
-     `uv run 0920-calendar-reader tests/fixtures/agenda.ics 2026-09-01 2026-09-30`
+- CLI y entrypoint de consola.
+- Expansion de recurrencias (`RRULE`).
+- Eventos de dia completo.
+- Tests automaticos (se anadiran con `pytest` cuando haga falta).
+- Exportacion a Excel/JSON y la futura webapp.
 
-7. **Documentacion**
-   - Rellenar `README.md` con uso, ejemplos y limitaciones (recurrencias no
-     expandidas en v1).
+## Riesgos conocidos
 
-8. **Verificacion final**
-   - `uv run 0920-calendar-reader --help`
-   - Ejecucion real contra un `.ics` de prueba.
-   - Si se anaden herramientas de lint/format, registrar el comando en
-     `AGENTS.md`.
-
-## Casos limite a cubrir
-
-- Dia completo vs. con hora.
-- `DURATION` sin `DTEND`.
-- Zonas horarias (`TZID`) y UTC (`Z`).
-- Eventos que empiezan antes de `desde` pero terminan dentro del rango.
-- Eventos recurrentes (`RRULE`): en v1 se trata solo la primera ocurrencia o se
-  documenta como no soportado.
-- Ficheros con multiples `VCALENDAR` o `VEVENT` sin `SUMMARY`.
-
-## Fuera de alcance (v1)
-
-- Expansion de recurrencias.
-- Exportacion a Excel/JSON.
-- Interfaz web o GUI.
-
-
-
-## MODIFICACIONES
-
-- Cambia el nombre del proyecto a calendar_reader
-- Quiero que el código que escribas sea MÍNIMO. Es decir:
-  - No hace falta que te inventes clases de datos si no es necesario, ¿no sirve un diccionario?
-  - No añadas dependencias innecesarias.
-  - No cubras casos límite sin decírmelo.
-- icalendar es suficiente, no habrá eventos recurrentes
-- no hay eventos de día completo
-- No hace falta crear un CLI, crearemos otro script para hacer tests a mano. En el futuro esto sera una webapp sencilla así que olvida la CLI.
-- Por el momento no hagas verificacion ni tests porque no tenemos los archivos.
+- Si apareciera un evento flotante (sin zona), `.astimezone(MADRID)` lo
+  interpreta como hora del sistema; no se espera en este calendario.
+- El codigo se valida solo con el script manual, no con tests automaticos.
