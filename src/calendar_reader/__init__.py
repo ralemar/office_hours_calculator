@@ -8,33 +8,33 @@ from icalendar import Calendar
 MADRID = ZoneInfo("Europe/Madrid")
 
 
-def leer_eventos(ruta: str | Path, desde: date, hasta: date) -> list[dict]:
-    contenido = Path(ruta).read_bytes()
-    calendario = Calendar.from_ical(contenido)
+def read_events(path: str | Path, date_from: date, date_to: date) -> list[dict]:
+    content = Path(path).read_bytes()
+    calendar = Calendar.from_ical(content)
 
-    eventos = []
-    for componente in calendario.walk("VEVENT"):
-        inicio = componente["DTSTART"].dt.astimezone(MADRID)
-        if inicio.date() < desde or inicio.date() > hasta:
+    events = []
+    for component in calendar.walk("VEVENT"):
+        start = component["DTSTART"].dt.astimezone(MADRID)
+        if start.date() < date_from or start.date() > date_to:
             continue
 
-        if "DTEND" in componente:
-            fin = componente["DTEND"].dt.astimezone(MADRID)
-        elif "DURATION" in componente:
-            fin = inicio + componente["DURATION"].dt
+        if "DTEND" in component:
+            end = component["DTEND"].dt.astimezone(MADRID)
+        elif "DURATION" in component:
+            end = start + component["DURATION"].dt
         else:
-            warnings.warn(f"El evento '{componente.get('SUMMARY', '')}' no tiene DTEND ni DURATION; se asume duracion 0")
-            fin = inicio
+            warnings.warn(f"Event '{component.get('SUMMARY', '')}' has no DTEND or DURATION; assuming zero duration")
+            end = start
 
-        eventos.append(
+        events.append(
             {
-                "nombre": str(componente.get("SUMMARY", "")),
-                "fecha": inicio.date(),
-                "inicio": inicio.time(),
-                "fin": fin,
-                "duracion_horas": (fin - inicio).total_seconds() / 3600,
+                "name": str(component.get("SUMMARY", "")),
+                "date": start.date(),
+                "start": start.time(),
+                "end": end,
+                "duration_hours": (end - start).total_seconds() / 3600,
             }
         )
 
-    eventos.sort(key=lambda evento: (evento["fecha"], evento["inicio"]))
-    return eventos
+    events.sort(key=lambda event: (event["date"], event["start"]))
+    return events

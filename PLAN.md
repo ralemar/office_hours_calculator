@@ -1,43 +1,44 @@
-# PLAN: Herramienta lectora de calendarios ICS
+# PLAN: ICS calendar reader tool
 
-## Objetivo
+## Goal
 
-Leer un fichero `.ics` y, dadas dos fechas (`desde`, `hasta`), devolver los
-eventos comprendidos en ese rango con estos datos:
+Read an `.ics` file and, given two dates (`date_from`, `date_to`), return the
+events within that range with the following data:
 
-- Nombre del evento
-- Fecha
-- Hora de inicio
-- Hora final
-- Duracion (en horas)
+- Event name
+- Date
+- Start time
+- End time
+- Duration (in hours)
 
-El resultado lo consumira un script manual de pruebas y, en el futuro, una
-webapp sencilla. Por eso **no hay CLI**: la logica se expone como una funcion
-reutilizable.
+The result will be consumed by a manual test script and, in the future, by a
+simple web app. That is why there is **no CLI**: the logic is exposed as a
+reusable function.
 
-## Decisiones cerradas
+## Settled decisions
 
-- **Libreria ICS:** `icalendar`, unica dependencia. No hay eventos recurrentes
-  (`RRULE`) ni eventos de dia completo, asi que no hacen falta librerias extra.
-- **Sin CLI:** se elimino el entrypoint `[project.scripts]` de `pyproject.toml`.
-- **Codigo minimo:** sin dataclasses ni capas innecesarias; el evento es un
-  `dict` plano.
-- **Zonas horarias:** el `.ics` real guarda las horas en UTC (`Z`), aunque el
-  calendario sea de Madrid. Se convierten a **`Europe/Madrid`** con
-  `ZoneInfo("Europe/Madrid")` antes de filtrar y mostrar. En Windows, `tzdata`
-  entra como dependencia de `icalendar`, asi que no se anade nada extra.
-- **Sin tests automaticos en esta fase:** la comprobacion se hace con un script
-  manual sobre un `.ics` real.
+- **ICS library:** `icalendar`, the only dependency. There are no recurring
+  events (`RRULE`) or all-day events, so no extra libraries are needed.
+- **No CLI:** the `[project.scripts]` entry point was removed from
+  `pyproject.toml`.
+- **Minimal code:** no dataclasses or unnecessary layers; an event is a flat
+  `dict`.
+- **Timezones:** the real `.ics` stores times in UTC (`Z`), even though the
+  calendar is from Madrid. Times are converted to **`Europe/Madrid`** with
+  `ZoneInfo("Europe/Madrid")` before filtering and displaying. On Windows,
+  `tzdata` comes in as a dependency of `icalendar`, so nothing extra is added.
+- **No automated tests at this stage:** validation is done with a manual script
+  against a real `.ics`.
 
-## Renombrado del proyecto
+## Project rename
 
-- Nombre de distribucion: **`calendar-reader`**.
-- Paquete: **`calendar_reader`** (carpeta `src/calendar_reader/`).
-- `pyproject.toml`: `name = "calendar-reader"`, sin `[project.scripts]`,
-  descripcion actualizada.
-- Lockfile regenerado con `uv lock`.
+- Distribution name: **`calendar-reader`**.
+- Package: **`calendar_reader`** (folder `src/calendar_reader/`).
+- `pyproject.toml`: `name = "calendar-reader"`, no `[project.scripts]`, updated
+  description.
+- Lockfile regenerated with `uv lock`.
 
-## Estructura final
+## Final structure
 
 ```
 pyproject.toml
@@ -46,100 +47,100 @@ README.md
 PLAN.md
 src/
 └── calendar_reader/
-    └── __init__.py              # funcion leer_eventos()
+    └── __init__.py              # read_events() function
 tests/
 └── fixtures/
-    └── calendario_test.ics      # calendario real de prueba
+    └── test_calendar.ics        # real test calendar
 scripts/
-└── probar_calendario.py         # script manual de volcado
+└── try_calendar.py              # manual dump script
 ```
 
-- `tests/` es la carpeta que busca `pytest`; aqui solo viven datos en
-  `tests/fixtures/`. Los futuros test iran como `tests/test_*.py`.
-- `scripts/` alberga utilidades de desarrollo que se ejecutan a mano.
+- `tests/` is the folder `pytest` looks for; for now it only holds data under
+  `tests/fixtures/`. Future tests will live as `tests/test_*.py`.
+- `scripts/` holds development utilities meant to be run by hand.
 
-## API publica
+## Public API
 
 `src/calendar_reader/__init__.py`
 
 ```python
-def leer_eventos(ruta, desde, hasta) -> list[dict]:
+def read_events(path, date_from, date_to) -> list[dict]:
     ...
 ```
 
-- `ruta`: `str | Path` al fichero `.ics`.
-- `desde`, `hasta`: `datetime.date`.
-- Devuelve una lista de `dict`, ordenada por fecha y hora de inicio.
+- `path`: `str | Path` to the `.ics` file.
+- `date_from`, `date_to`: `datetime.date`.
+- Returns a list of `dict`, sorted by date and start time.
 
-### Esquema de cada evento
+### Per-event schema
 
-| clave | tipo | descripcion |
+| key | type | description |
 |---|---|---|
-| `nombre` | `str` | `SUMMARY` del evento |
-| `fecha` | `datetime.date` | fecha de inicio (en Madrid) |
-| `inicio` | `datetime.time` | hora de inicio (en Madrid) |
-| `fin` | `datetime.datetime` | fecha y hora finales (en Madrid) |
-| `duracion_horas` | `float` | `(fin - inicio)` en horas |
+| `name` | `str` | event `SUMMARY` |
+| `date` | `datetime.date` | start date (in Madrid) |
+| `start` | `datetime.time` | start time (in Madrid) |
+| `end` | `datetime.datetime` | end date and time (in Madrid) |
+| `duration_hours` | `float` | `(end - start)` in hours |
 
-`fin` se devuelve como `datetime` completo para no perder los eventos que
-terminan despues de medianoche (p. ej. `Evento test 3`). `inicio` se mantiene
-como `time` porque su fecha ya esta en `fecha`.
+`end` is returned as a full `datetime` so that events ending after midnight are
+not lost (e.g. `Evento test 3`). `start` stays a `time` because its date is
+already in `date`.
 
-## Logica de la funcion
+## Function logic
 
-1. Abrir el fichero y parsearlo con `icalendar.Calendar.from_ical(...)`.
-2. Recorrer los componentes `VEVENT`.
-3. Para cada evento extraer `SUMMARY`, `DTSTART` y `DTEND`.
-4. Convertir `DTSTART`/`DTEND` a `Europe/Madrid` con `.astimezone(MADRID)`.
-5. Filtrar: incluir solo si `desde <= inicio.date() <= hasta`
-   (rango inclusivo, de 00:00 del dia inicial a 23:59 del dia final).
-   El filtrado se basa en la fecha de inicio, no en el solape.
-6. Calcular `duracion_horas = (fin - inicio).total_seconds() / 3600`.
-7. Ordenar por `(fecha, inicio)`.
-8. Devolver la lista de `dict`.
+1. Open the file and parse it with `icalendar.Calendar.from_ical(...)`.
+2. Walk the `VEVENT` components.
+3. Extract `SUMMARY`, `DTSTART` and `DTEND` from each event.
+4. Convert `DTSTART`/`DTEND` to `Europe/Madrid` with `.astimezone(MADRID)`.
+5. Filter: include only if `date_from <= start.date() <= date_to`
+   (inclusive range, from 00:00 of the first day to 23:59 of the last day).
+   Filtering is based on the start date, not on overlap.
+6. Compute `duration_hours = (end - start).total_seconds() / 3600`.
+7. Sort by `(date, start)`.
+8. Return the list of `dict`.
 
-## Casos limite: como se tratan
+## Edge cases: how they are handled
 
-- **Falta `DTEND` (y no hay `DURATION`):** se asume `fin = inicio`, es decir,
-  duracion `0.0`. Se emite un `warnings.warn(...)` avisando del evento. No se
-  interrumpe la ejecucion.
-- **`DURATION` en lugar de `DTEND`:** `icalendar` ya lo expone; si aparece, se
-  resuelve con `inicio + duration` para obtener `fin`.
-- **Falta `SUMMARY`:** se usa cadena vacia `""` como nombre.
-- **Eventos sin hora (dia completo):** fuera de alcance por decision explicita;
-  no se contemplan.
-- **Recurrencias (`RRULE`):** fuera de alcance; solo se lee la primera
-  ocurrencia que aparezca en el `VEVENT`.
-- **Zonas horarias:** se convierten a `Europe/Madrid` (ver "Decisiones
-  cerradas").
+- **Missing `DTEND` (and no `DURATION`):** `end = start` is assumed, i.e. a
+  `0.0` duration. A `warnings.warn(...)` notice is emitted. Execution is not
+  interrupted.
+- **`DURATION` instead of `DTEND`:** `icalendar` already exposes it; when
+  present, it is resolved with `start + duration` to get `end`.
+- **Missing `SUMMARY`:** an empty string `""` is used as the name.
+- **Events without a time (all-day):** out of scope by explicit decision; not
+  handled.
+- **Recurrences (`RRULE`):** out of scope; only the first occurrence found in
+  the `VEVENT` is read.
+- **Timezones:** converted to `Europe/Madrid` (see "Settled decisions").
 
-## Pasos de implementacion
+## Implementation steps
 
-Ejecutados:
+Done:
 
-1. **Renombrar** paquete y proyecto; quitar `[project.scripts]`; `uv lock`.
-2. **Anadir dependencia:** `uv add icalendar`.
-3. **Implementar `leer_eventos`** en `src/calendar_reader/__init__.py`.
-4. **Dato de prueba:** mover el `.ics` a `tests/fixtures/calendario_test.ics`.
-5. **Script manual:** crear `scripts/probar_calendario.py`, que llama a
-   `leer_eventos` con el `.ics` de fixtures y lo imprime.
-6. **Documentacion:** `README.md` con la firma, ejemplo de uso y limitaciones.
+1. **Rename** package and project; remove `[project.scripts]`; `uv lock`.
+2. **Add dependency:** `uv add icalendar`.
+3. **Implement `read_events`** in `src/calendar_reader/__init__.py`.
+4. **Test data:** move the `.ics` to `tests/fixtures/test_calendar.ics`.
+5. **Manual script:** create `scripts/try_calendar.py`, which calls
+   `read_events` on the fixture `.ics` and prints it.
+6. **Documentation:** `README.md` with the signature, usage example and
+   limitations.
 
-Pendiente:
+Pending:
 
-7. **Ejecutar el script** contra el `.ics` real para validar la salida.
-   `uv run python scripts/probar_calendario.py`
+7. **Run the script** against the real `.ics` to validate the output.
+   `uv run python scripts/try_calendar.py`
 
-## Fuera de alcance
+## Out of scope
 
-- CLI y entrypoint de consola.
-- Expansion de recurrencias (`RRULE`).
-- Eventos de dia completo.
-- Tests automaticos (se anadiran con `pytest` cuando haga falta).
-- Exportacion a Excel/JSON y la futura webapp.
+- CLI and console entry point.
+- Expanding recurrences (`RRULE`).
+- All-day events.
+- Automated tests (to be added with `pytest` when needed).
+- Export to Excel/JSON and the future web app.
 
-## Riesgos conocidos
+## Known risks
 
-- Si apareciera un evento flotante (sin zona), `.astimezone(MADRID)` lo
-  interpreta como hora del sistema; no se espera en este calendario.
-- El codigo se valida solo con el script manual, no con tests automaticos.
+- If a floating event (no timezone) ever appeared, `.astimezone(MADRID)` would
+  interpret it as system time; it is not expected in this calendar.
+- The code is validated only with the manual script, not with automated tests.

@@ -1,7 +1,7 @@
 [project]
 name = "calendar-reader"
 version = "0.1.0"
-description = "Lee eventos de un calendario en formato ICS dentro de un rango de fechas"
+description = "Reads events from an ICS calendar within a date range"
 readme = "README.md"
 authors = [
     { name = "Raul Alegre", email = "raul.alemar@gmail.com" }
