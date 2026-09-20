@@ -8,8 +8,8 @@ from icalendar import Calendar
 MADRID = ZoneInfo("Europe/Madrid")
 
 
-def read_events(path: str | Path, date_from: date, date_to: date) -> list[dict]:
-    content = Path(path).read_bytes()
+def read_events(source: str | Path | bytes, date_from: date, date_to: date) -> list[dict]:
+    content = source if isinstance(source, bytes) else Path(source).read_bytes()
     calendar = Calendar.from_ical(content)
 
     events = []

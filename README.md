@@ -14,7 +14,7 @@ for event in events:
     print(event["name"], event["date"], event["start"], event["end"], event["duration_hours"])
 ```
 
-`read_events(path, date_from, date_to)` returns a list of `dict` sorted by date
+`read_events(source, date_from, date_to)` returns a list of `dict` sorted by date
 and start time, with the following keys:
 
 | key | type | description |
@@ -25,9 +25,20 @@ and start time, with the following keys:
 | `end` | `datetime.datetime` | end date and time (timezone-aware) |
 | `duration_hours` | `float` | duration in hours |
 
+`source` can be a path (`str`/`Path`) or the raw `.ics` bytes.
+
 The range is inclusive: from 00:00 of `date_from` to 23:59 of `date_to`, and it
 is filtered by the event's start date. Times are returned converted to
 `Europe/Madrid`.
+
+## Web app
+
+A small Streamlit app lets you upload an `.ics` file and pick the date range.
+Run it from the repository root:
+
+```powershell
+uv run streamlit run app/streamlit_app.py
+```
 
 ## Test script
 
