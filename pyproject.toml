@@ -1,16 +1,15 @@
 [project]
-name = "0920-calendar-reader"
+name = "calendar-reader"
 version = "0.1.0"
-description = "Add your description here"
+description = "Lee eventos de un calendario en formato ICS dentro de un rango de fechas"
 readme = "README.md"
 authors = [
     { name = "Raul Alegre", email = "raul.alemar@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
-
-[project.scripts]
-0920-calendar-reader = "0920_calendar_reader:main"
+dependencies = [
+    "icalendar>=7.3.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.17,<0.13.0"]
