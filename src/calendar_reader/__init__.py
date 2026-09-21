@@ -1,7 +1,9 @@
 import io
+import re
+import unicodedata
 import warnings
 import zipfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -10,6 +12,16 @@ from icalendar import Calendar
 MADRID = ZoneInfo("Europe/Madrid")
 
 IGNORED_NAMES = {"cet opens", "cet closes"}
+UNAVAILABLE_PATTERN = re.compile(r"\b(mimo|pryc)\b")
+
+
+def _is_unavailable(name: str) -> bool:
+    folded = name.casefold()
+    if folded in IGNORED_NAMES:
+        return True
+    ascii_name = unicodedata.normalize("NFKD", folded).encode("ascii", "ignore").decode()
+    return UNAVAILABLE_PATTERN.search(ascii_name) is not None
+
 
 
 def read_events(source: str | Path | bytes, date_from: date, date_to: date) -> list[dict]:
@@ -23,11 +35,15 @@ def read_events(source: str | Path | bytes, date_from: date, date_to: date) -> l
 
     events = []
     for component in calendar.walk("VEVENT"):
-        name = str(component.get("SUMMARY", "")).strip()
-        if name.casefold() in IGNORED_NAMES:
+        dtstart = component["DTSTART"].dt
+        if not isinstance(dtstart, datetime):
             continue
 
-        start = component["DTSTART"].dt.astimezone(MADRID)
+        name = str(component.get("SUMMARY", "")).strip()
+        if _is_unavailable(name):
+            continue
+
+        start = dtstart.astimezone(MADRID)
         if start.date() < date_from or start.date() > date_to:
             continue
 

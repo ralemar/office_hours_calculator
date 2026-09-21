@@ -34,7 +34,9 @@ is filtered by the event's start date. Times are returned converted to
 `Europe/Madrid`.
 
 Events named `CET opens` or `CET closes` (case-insensitive, surrounding spaces
-ignored) are skipped.
+ignored) are skipped, as are events whose name contains the standalone word
+`mimo` or `pryč` (any diacritics, e.g. `pryc`/`pryč`; surrounded only by
+non-letters such as spaces or parentheses). All-day events are always skipped.
 
 ## Hours per person
 
@@ -63,19 +65,30 @@ range. Run it from the repository root:
 uv run streamlit run app/streamlit_app.py
 ```
 
-## Test script
+## Test script and fixtures
 
-There is a test calendar at `tests/fixtures/test_calendar.ics` and a manual
-script to dump it:
+`scripts/try_calendar.py` dumps the events and the hours per person for a
+calendar. It defaults to `tests/fixtures/test_calendar.ics`, or takes a path:
 
 ```powershell
 uv run python scripts/try_calendar.py
+uv run python scripts/try_calendar.py tests/fixtures/test_hours.ics
 ```
+
+Fixtures under `tests/fixtures/`:
+
+| file | purpose |
+|---|---|
+| `test_calendar.ics` | real-world sample (UTC times, one event past midnight) |
+| `test_calendar.zip` | a compressed calendar, to check `.zip` input |
+| `test_hours.ics` | same person across days to check the totals (`Alice` 6.5 h, `Bob` 2 h) |
+| `test_unavailable.ics` | all-day and `mimo`/`pryč` variants to check the filtering |
+| `test_cet_filter.ics` | `CET opens`/`CET closes` markers to check they are skipped |
 
 ## Limitations
 
 - Does not expand recurring events (`RRULE`).
-- Does not handle all-day events.
+- All-day events are skipped (they have no meaningful hour count).
 - Times are converted to `Europe/Madrid`; on Windows this requires `tzdata`
   (already pulled in as a dependency of `icalendar`).
 - If an event has no `DTEND` or `DURATION`, a zero duration is assumed and a
