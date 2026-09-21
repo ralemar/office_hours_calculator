@@ -7,9 +7,9 @@ from calendar_reader import read_events
 st.set_page_config(page_title="ICS Calendar Reader")
 
 st.title("ICS Calendar Reader")
-st.write("Upload an .ics calendar and pick a date range to list its events.")
+st.write("Upload an .ics or .zip calendar and pick a date range to list its events.")
 
-uploaded = st.file_uploader("Upload your .ics calendar", type=["ics"])
+uploaded = st.file_uploader("Upload your .ics or .zip calendar", type=["ics", "zip"])
 
 today = date.today()
 col_from, col_to = st.columns(2)
@@ -20,7 +20,7 @@ with col_to:
 
 if st.button("Scan events"):
     if uploaded is None:
-        st.warning("Please upload an .ics file first.")
+        st.warning("Please upload an .ics or .zip file first.")
     elif date_from > date_to:
         st.error("The 'From' date must be before or equal to the 'To' date.")
     else:

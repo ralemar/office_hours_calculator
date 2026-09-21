@@ -1,4 +1,6 @@
+import io
 import warnings
+import zipfile
 from datetime import date
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -10,6 +12,11 @@ MADRID = ZoneInfo("Europe/Madrid")
 
 def read_events(source: str | Path | bytes, date_from: date, date_to: date) -> list[dict]:
     content = source if isinstance(source, bytes) else Path(source).read_bytes()
+    if zipfile.is_zipfile(io.BytesIO(content)):
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            names = archive.namelist()
+            name = next((n for n in names if n.lower().endswith(".ics")), names[0])
+            content = archive.read(name)
     calendar = Calendar.from_ical(content)
 
     events = []

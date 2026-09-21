@@ -25,7 +25,9 @@ and start time, with the following keys:
 | `end` | `datetime.datetime` | end date and time (timezone-aware) |
 | `duration_hours` | `float` | duration in hours |
 
-`source` can be a path (`str`/`Path`) or the raw `.ics` bytes.
+`source` can be a path (`str`/`Path`) or the raw bytes of an `.ics` **or a
+`.zip` containing it**. When a zip is given, the first `.ics` inside is used
+(Google Calendar exports a compressed archive).
 
 The range is inclusive: from 00:00 of `date_from` to 23:59 of `date_to`, and it
 is filtered by the event's start date. Times are returned converted to
@@ -33,8 +35,8 @@ is filtered by the event's start date. Times are returned converted to
 
 ## Web app
 
-A small Streamlit app lets you upload an `.ics` file and pick the date range.
-Run it from the repository root:
+A small Streamlit app lets you upload an `.ics` or `.zip` file and pick the date
+range. Run it from the repository root:
 
 ```powershell
 uv run streamlit run app/streamlit_app.py
@@ -57,3 +59,5 @@ uv run python scripts/try_calendar.py
   (already pulled in as a dependency of `icalendar`).
 - If an event has no `DTEND` or `DURATION`, a zero duration is assumed and a
   `warnings.warn` notice is emitted.
+- For `.zip` input, it assumes the archive holds the calendar (a single `.ics` is
+  used).
