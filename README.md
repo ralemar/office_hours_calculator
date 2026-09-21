@@ -33,6 +33,9 @@ The range is inclusive: from 00:00 of `date_from` to 23:59 of `date_to`, and it
 is filtered by the event's start date. Times are returned converted to
 `Europe/Madrid`.
 
+Events named `CET opens` or `CET closes` (case-insensitive, surrounding spaces
+ignored) are skipped.
+
 ## Web app
 
 A small Streamlit app lets you upload an `.ics` or `.zip` file and pick the date

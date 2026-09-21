@@ -1,42 +1,82 @@
-# PLAN: Accept zipped ICS uploads
+# PLAN: Ignore "CET opens" / "CET closes" events
 
 ## Goal
 
-Allow the user to upload the Google Calendar export as-is: a `.zip` archive
-containing the `.ics`. No need to unzip beforehand, and no new dependencies.
+Some events in the calendar are named `CET opens` and `CET closes`. They are
+markers, not real activities, so they must be excluded from the analysis.
+Nothing else should change.
 
-## Decision
+## Where to filter
 
-Handle the zip detection inside `read_events` (not in the app), so both the
-Streamlit app and the manual script get the behavior for free. Detection is by
-content (`zipfile.is_zipfile`), not by file extension.
+Best place is inside `read_events` in `src/calendar_reader/__init__.py`, so both
+the Streamlit app and `scripts/try_calendar.py` get the behavior for free. Doing
+it in the UI would be lost as soon as the function is called from elsewhere.
 
-## Changes
+## Approach (recommended)
 
-1. **`src/calendar_reader/__init__.py`**
-   - Add `import io` and `import zipfile` (standard library only).
-   - After obtaining `content`, if it is a zip, open it and read the first entry
-     ending in `.ics` (case-insensitive). If the archive has no `.ics`, fall back
-     to the first entry.
-   - No other logic changes: paths and raw `.ics` bytes keep working as before.
+Add a module-level constant with the names to skip and check it while walking
+the events, before the event is appended:
 
-2. **`app/streamlit_app.py`**
-   - `st.file_uploader(..., type=["ics", "zip"])`.
-   - Updated labels/warnings to mention `.zip`.
-   - No error handling added (invalid files still surface Streamlit's traceback).
+```python
+IGNORED_NAMES = {"cet opens", "cet closes"}
 
-3. **`README.md`**
-   - Document that `source` accepts `.ics` bytes or a `.zip` containing it.
-   - Mention it in the web app section and limitations.
+
+def read_events(source, date_from, date_to):
+    ...
+    for component in calendar.walk("VEVENT"):
+        name = str(component.get("SUMMARY", "")).strip()
+        if name.casefold() in IGNORED_NAMES:
+            continue
+        ...
+```
+
+- The constant stores names already normalized (lowercase) to compare against
+  `name.casefold()`.
+- `.strip()` removes accidental surrounding spaces.
+- The check happens **before** the date filter/appending, so ignored events cost
+  no extra work.
+
+## Matching rule options
+
+1. **Exact, case-insensitive, trimmed** (recommended): only `CET opens` and
+   `CET closes` (any casing/spacing) are dropped. Lowest risk of dropping a real
+   event by accident.
+2. **Prefix `cet `**: also drops any future event starting with `CET ...`.
+   Convenient, but could hide something you actually want.
+3. **Substring**: too broad; not recommended.
+
+## Optional: make it configurable
+
+Instead of a fixed constant, add a parameter with a default:
+
+```python
+def read_events(source, date_from, date_to, ignore=IGNORED_NAMES):
+    ...
+```
+
+This keeps current behavior by default and lets the future web app expose the
+list if needed. Slightly more code; only worth it if configurability is wanted.
+
+## Edge cases
+
+- `CET opens` written with different case (`cet opens`, `Cet Opens`): handled by
+  `casefold()`.
+- Trailing/leading spaces in the `SUMMARY`: handled by `strip()`.
+- Missing `SUMMARY`: the empty string is not in the set, so the event is kept.
+- Does not affect zip handling, timezone conversion, duration or ordering.
 
 ## Verification
 
-- Regression: `uv run python scripts/try_calendar.py` (path to `.ics`).
-- Zip: generate a temporary `.zip` outside the repo with the test `.ics` inside
-  and call `read_events` with its bytes; the output must match the regression.
+1. Add a temporary event named `CET opens` (or use a real `.ics` that has them)
+   inside the chosen date range.
+2. Run `uv run python scripts/try_calendar.py` and confirm the `CET opens` /
+   `CET closes` entries are absent while the rest is unchanged.
+3. Regression: the existing test calendar output must stay the same (it has no
+   `CET` events).
 
-## Out of scope
+## Decisions
 
-- Zip files with several `.ics` (only the first is used).
-- Password-protected archives.
-- Friendly error handling in the app.
+- **Exact match (option 1)**: only `CET opens` / `CET closes`, compared
+  case-insensitively and trimmed.
+- **Fixed constant** for now. Manual removal or broader configuration may be
+  added later.
