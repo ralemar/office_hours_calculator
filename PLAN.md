@@ -1,98 +1,95 @@
-# PLAN: Filter unavailable-worker events (all-day, "mimo" / "pryč")
+# PLAN: Match event names to workers with the official Jev SDK
 
 ## Goal
 
-Some events mark that a worker is not available those days. They are usually
-all-day events and their name contains `mimo` or `pryč`. They must be excluded
-from the analysis (both the events table and the hours-per-person totals).
+Event names are worker identifiers, but they do not match the worker list
+exactly: lowercase, durations in parentheses (`(Simon 8h)`, `Simon (5 hodin -
+okna)`), or just the surname initial (`Jan N`). Match each event name to a
+worker from a user-provided list and aggregate hours per worker, using Jev
+(TypeSafe AI System One) through the **official** `typesafe-sdk`.
 
-## Important finding first
+## Decisions
 
-Today the code assumes every event has a time:
+- Use the official SDK: `typesafe-sdk` (not `fuzzyif`).
+- One single API request: several `Choice` questions, one per event name, in one
+  `system_one(...)` call (no dedupe, no batches).
+- If the API fails, unresolved names are excluded and reported; the app does not
+  crash.
+- Matching logic lives in a new `src/calendar_reader/matching.py`, separate from
+  the ICS parsing.
+- Ambiguity rule: mark as `"UNDETERMINED"` when `choice == "other"`,
+  `confidence < 0.6`, or the top-2 probability margin is small.
+- The worker list is a parameter for now; its UI is still to be decided.
 
-```python
-start = component["DTSTART"].dt.astimezone(MADRID)
-```
+## Dependency and configuration
 
-For an all-day event, `DTSTART` is a `datetime.date` (no time), and `date` has no
-`.astimezone`, so the function would **crash** with `AttributeError`. So handling
-all-day events is not optional anymore.
+- `uv add typesafe-sdk` (Python 3.10+; verify it installs on 3.14).
+- API key: read by the caller (the app or a script) with Streamlit's `st.secrets`
+  and passed to the matching functions. The package creates the client with
+  `TypeSafeClient(api_key=api_key)`. Never commit the key.
 
-## Idea A - Filter by name (recommended)
+## `src/calendar_reader/matching.py`
 
-Extend the current ignore logic from exact names to substrings. Keep the existing
-`IGNORED_NAMES` for exact matches (`CET opens`, `CET closes`) and add a keyword
-list for partial matches:
+- `match_workers(names, workers, api_key, min_confidence=0.6, min_margin=0.15) -> dict[str, str]`:
+  1. No dedupe and no batches: one `Choice` per event name in a single call (few
+     names).
+  2. `criteria = {worker: worker for worker in workers} + {"other": "does not
+     clearly match any worker / ambiguous"}` (the worker is both the option name
+     and the description, so the name is always sent).
+  3. Instructions are just `"Which worker does \`event_name\` represent?"`. The
+     shared answer guidelines (lowercase, duration in parentheses, surname
+     initial, `other` when unclear, exact match wins) go in `state`, together
+     with the worker list, since they are common to every question.
+  4. Read `response.answers[f"event_{i}"]`; return `"UNDETERMINED"` if
+     `choice == "other"`, `confidence < min_confidence`, or the top-2 margin is
+     below `min_margin`.
+- `assign_workers(events, workers, api_key, ...) -> list[dict]`: creates the client
+  from the key and adds a `worker` key (canonical name or `"UNDETERMINED"`).
+  Assignment only.
 
-```python
-UNAVAILABLE_KEYWORDS = ("mimo", "pryč")
+## Integration
 
-...
-name = str(component.get("SUMMARY", "")).strip()
-folded = name.casefold()
-if folded in IGNORED_NAMES or any(k in folded for k in UNAVAILABLE_KEYWORDS):
-    continue
-```
+- Two independent steps, each in its own module:
+  1. `matching.assign_workers(events, workers, api_key, ...)` assigns a `worker`
+     to each event (or `"UNDETERMINED"`).
+  2. `analytics.total_hours_by_person(events)` sums by the `worker` key (falling
+     back to `name` when absent) and skips `"UNDETERMINED"`.
+- API failure is caught: affected names become `"UNDETERMINED"` and a warning is
+  emitted.
+- Unmatched/ambiguous names are listed separately for the warning
+  (`[e["name"] for e in assigned if e["worker"] == "UNDETERMINED"]`).
+- The web app is not wired yet: the worker list source and UX are pending.
 
-- Case-insensitive via `casefold()`.
-- Substring match, so `Pryč - dovolená` or `Mimo kancelář` are caught too.
-- This check must run **before** touching `DTSTART`, so the all-day crash never
-  happens for these events.
+## Limits and risks
 
-### Diacritics caveat
+- A `Choice` accepts at most 255 options; with more workers, chunk or go
+  hierarchical.
+- Latency is 70-500 ms per request; all names go in a single request.
+- Privacy: worker names are sent to the TypeSafe cloud. This is a data-processing
+  decision.
+- External dependency + early access; the "exclude and warn" fallback keeps the
+  app usable.
 
-`casefold()` handles case but not accents: `pryč` != `pryc`. If a calendar ever
-writes the keyword without the diacritic, normalize first, e.g. with
-`unicodedata.normalize("NFKD", name)` and dropping combining marks, or add both
-spellings (`"pryč"`, `"pryc"`) to the keyword list. Simplest for now: list both
-spellings.
+## Configuration and test data
 
-## Idea B - Filter all-day events structurally
+- **API key**: the caller reads it with Streamlit's `st.secrets`
+  (`st.secrets["TYPESAFE_API_KEY"]`) and passes it to `match_workers` /
+  `assign_workers`. Global `~/.streamlit/secrets.toml` or project
+  `.streamlit/secrets.toml` (git-ignored). Never commit it.
+- **Worker list for tests**: pass a Python list to `match_workers` /
+  `assign_workers`. For a file-based option, `tests/fixtures/workers.local.txt`
+  (one name per line) added to `.gitignore`, since real names are personal data.
 
-Independent of the name, treat any all-day event (DTSTART is a `date`, not a
-`datetime`) as "not a shift". Options:
+## Verification
 
-1. **Skip it** entirely (cleanest for a work-hours analysis, since a day-long
-   event has no meaningful hour count).
-2. Keep it but with `0` hours / no times (adds complexity for little value).
+- With a real key: `other`, low `confidence`, and small margin return
+  `"UNDETERMINED"`; a clear case returns the canonical name.
+- Cases: `(Simon 8h)`, `Simon (3h)`, `Aneta` vs `Aneta S`, and a name that
+  matches no worker.
+- Regression: `scripts/try_calendar.py` without `workers` must stay the same.
 
-Recommended: skip all-day events. This also protects against any all-day event
-that does not match the keywords.
+## Out of scope
 
-## Idea C - Use calendar flags instead of the name
-
-All-day "out of office" events sometimes carry `TRANSP:TRANSPARENT`,
-`STATUS:TENTATIVE` or `X-MICROSOFT-CDO-BUSYSTATUS:FREE`. Matching those would be
-more "semantic", but they are not guaranteed and vary by provider, so the name
-keywords are the most reliable signal here. Could be layered later.
-
-## Recommended combination
-
-- **A + B**: check the name keywords first, then skip any remaining all-day
-  event. Covers the described events and avoids the crash for any other all-day
-  event.
-
-Proposed order inside the `VEVENT` loop:
-
-1. Read and normalize `name`.
-2. Skip if it matches `IGNORED_NAMES` or `UNAVAILABLE_KEYWORDS`.
-3. Skip if `DTSTART` is a `date` without time (all-day).
-4. Continue with the existing time-based logic.
-
-## Edge cases
-
-- `pryč` with or without diacritics: handled by listing both, or normalizing.
-- Keyword as part of another word (e.g. a name containing "mimo"): substring
-  match could over-filter; switch to word boundaries with `re` if it happens.
-- All-day event with `DTEND` but no time: skipped in step 3, so duration is never
-  computed.
-- Multi-day unavailability: same, skipped as an all-day event.
-- Does not affect the `CET opens` / `CET closes` handling, zip support or
-  timezone conversion.
-
-## Open questions
-
-- Skip all-day events always (B.1), or only when they match the keywords?
-- Is substring matching acceptable, or should it be whole-word?
-- Should the keywords be a configurable parameter later (like the manual
-  removal idea)?
+- Worker-list UI and its persistence.
+- Manual override mapping for ambiguous names.
+- Automated tests.

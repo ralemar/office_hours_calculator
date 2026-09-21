@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Secrets and local data
+.streamlit/secrets.toml
+tests/fixtures/workers.local.txt

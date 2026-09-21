@@ -6,7 +6,7 @@ Reads the events of an ICS calendar that fall within a date range.
 
 ```python
 from datetime import date
-from calendar_reader import read_events
+from calendar_reader.reader import read_events
 
 events = read_events("agenda.ics", date(2026, 9, 1), date(2026, 9, 30))
 
@@ -45,7 +45,8 @@ When event names identify a person (each event is a work shift),
 same name:
 
 ```python
-from calendar_reader import read_events, total_hours_by_person
+from calendar_reader.reader import read_events
+from calendar_reader.analytics import total_hours_by_person
 
 events = read_events("agenda.ics", date(2026, 9, 1), date(2026, 9, 30))
 
@@ -54,7 +55,44 @@ for row in total_hours_by_person(events):
 ```
 
 It returns a list of `dict` with keys `name` (`str`) and `total_hours` (`float`,
-rounded to 2 decimals), sorted by total hours descending.
+rounded to 2 decimals), sorted alphabetically by worker name.
+
+## Matching event names to a worker list (Jev)
+
+Event names rarely match a worker list exactly (lowercase, durations in
+parentheses, surname initials). Pass the worker list and the API key to let the
+official `typesafe-sdk` map each name to a worker:
+
+```python
+from datetime import date
+import streamlit as st
+from calendar_reader.reader import read_events
+from calendar_reader.analytics import total_hours_by_person
+from calendar_reader.matching import assign_workers
+
+events = read_events("agenda.ics", date(2026, 9, 1), date(2026, 9, 30))
+workers = ["Šimon", "Aneta Š", "Aneta Nováková"]
+
+assigned = assign_workers(events, workers, st.secrets["TYPESAFE_API_KEY"])
+
+for event in assigned:
+    print(event["name"], "->", event["worker"])  # "UNDETERMINED" if ambiguous
+
+# Aggregate the already-assigned events
+for row in total_hours_by_person(assigned):
+    print(row["name"], row["total_hours"])
+```
+
+- `assign_workers(events, workers, api_key)` only assigns: it creates a
+  `TypeSafeClient` internally and adds a `worker` key per event.
+- A name gets `worker = "UNDETERMINED"` when Jev chooses `other`, the
+  `confidence` is below `0.6`, or the top probabilities are too close (ambiguous).
+- `total_hours_by_person(events)` only sums: it groups by the `worker` key when
+  present (falling back to `name`) and skips `UNDETERMINED`. Assign first, sum
+  after; the two steps are independent.
+- `matching.py` has no Streamlit dependency. Whoever reads the key (the app or a
+  script, e.g. from `st.secrets`) passes it in. If the API fails, events are left
+  unmatched and a warning is emitted.
 
 ## Web app
 
@@ -84,6 +122,14 @@ Fixtures under `tests/fixtures/`:
 | `test_hours.ics` | same person across days to check the totals (`Alice` 6.5 h, `Bob` 2 h) |
 | `test_unavailable.ics` | all-day and `mimo`/`pryč` variants to check the filtering |
 | `test_cet_filter.ics` | `CET opens`/`CET closes` markers to check they are skipped |
+| `test_workers.ics` | worker-like names (`Šimon`, `Aneta Š`, ambiguous `Aneta`, unknown `Karel`) for Jev matching |
+
+`scripts/try_workers.py` exercises the Jev matching with an invented worker list.
+The API key is read with Streamlit's native `st.secrets` (`TYPESAFE_API_KEY`):
+
+```powershell
+uv run python scripts/try_workers.py
+```
 
 ## Limitations
 
@@ -95,3 +141,5 @@ Fixtures under `tests/fixtures/`:
   `warnings.warn` notice is emitted.
 - For `.zip` input, it assumes the archive holds the calendar (a single `.ics` is
   used).
+- Worker matching sends the event names to the TypeSafe AI cloud and needs an API
+  key, so it does not work offline.
