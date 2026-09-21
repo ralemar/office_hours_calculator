@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from calendar_reader import read_events
+from calendar_reader import read_events, total_hours_by_person
 
 st.set_page_config(page_title="ICS Calendar Reader")
 
@@ -26,6 +26,9 @@ if st.button("Scan events"):
     else:
         events = read_events(uploaded.getvalue(), date_from, date_to)
         if events:
+            st.subheader("Events")
             st.dataframe(events)
+            st.subheader("Hours per person")
+            st.dataframe(total_hours_by_person(events))
         else:
             st.info("No events found in that date range.")

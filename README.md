@@ -36,6 +36,24 @@ is filtered by the event's start date. Times are returned converted to
 Events named `CET opens` or `CET closes` (case-insensitive, surrounding spaces
 ignored) are skipped.
 
+## Hours per person
+
+When event names identify a person (each event is a work shift),
+`total_hours_by_person(events)` sums the durations of the events sharing the
+same name:
+
+```python
+from calendar_reader import read_events, total_hours_by_person
+
+events = read_events("agenda.ics", date(2026, 9, 1), date(2026, 9, 30))
+
+for row in total_hours_by_person(events):
+    print(row["name"], row["total_hours"])
+```
+
+It returns a list of `dict` with keys `name` (`str`) and `total_hours` (`float`,
+rounded to 2 decimals), sorted by total hours descending.
+
 ## Web app
 
 A small Streamlit app lets you upload an `.ics` or `.zip` file and pick the date

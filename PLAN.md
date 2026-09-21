@@ -1,82 +1,45 @@
-# PLAN: Ignore "CET opens" / "CET closes" events
+# PLAN: Total hours per person
 
 ## Goal
 
-Some events in the calendar are named `CET opens` and `CET closes`. They are
-markers, not real activities, so they must be excluded from the analysis.
-Nothing else should change.
-
-## Where to filter
-
-Best place is inside `read_events` in `src/calendar_reader/__init__.py`, so both
-the Streamlit app and `scripts/try_calendar.py` get the behavior for free. Doing
-it in the UI would be lost as soon as the function is called from elsewhere.
-
-## Approach (recommended)
-
-Add a module-level constant with the names to skip and check it while walking
-the events, before the event is appended:
-
-```python
-IGNORED_NAMES = {"cet opens", "cet closes"}
-
-
-def read_events(source, date_from, date_to):
-    ...
-    for component in calendar.walk("VEVENT"):
-        name = str(component.get("SUMMARY", "")).strip()
-        if name.casefold() in IGNORED_NAMES:
-            continue
-        ...
-```
-
-- The constant stores names already normalized (lowercase) to compare against
-  `name.casefold()`.
-- `.strip()` removes accidental surrounding spaces.
-- The check happens **before** the date filter/appending, so ignored events cost
-  no extra work.
-
-## Matching rule options
-
-1. **Exact, case-insensitive, trimmed** (recommended): only `CET opens` and
-   `CET closes` (any casing/spacing) are dropped. Lowest risk of dropping a real
-   event by accident.
-2. **Prefix `cet `**: also drops any future event starting with `CET ...`.
-   Convenient, but could hide something you actually want.
-3. **Substring**: too broad; not recommended.
-
-## Optional: make it configurable
-
-Instead of a fixed constant, add a parameter with a default:
-
-```python
-def read_events(source, date_from, date_to, ignore=IGNORED_NAMES):
-    ...
-```
-
-This keeps current behavior by default and lets the future web app expose the
-list if needed. Slightly more code; only worth it if configurability is wanted.
-
-## Edge cases
-
-- `CET opens` written with different case (`cet opens`, `Cet Opens`): handled by
-  `casefold()`.
-- Trailing/leading spaces in the `SUMMARY`: handled by `strip()`.
-- Missing `SUMMARY`: the empty string is not in the set, so the event is kept.
-- Does not affect zip handling, timezone conversion, duration or ordering.
-
-## Verification
-
-1. Add a temporary event named `CET opens` (or use a real `.ics` that has them)
-   inside the chosen date range.
-2. Run `uv run python scripts/try_calendar.py` and confirm the `CET opens` /
-   `CET closes` entries are absent while the rest is unchanged.
-3. Regression: the existing test calendar output must stay the same (it has no
-   `CET` events).
+Event names act as a person identifier (each event is a work shift). Add a new
+table that sums the hours each person worked in the selected period: events with
+the same name get their `duration_hours` added together.
 
 ## Decisions
 
-- **Exact match (option 1)**: only `CET opens` / `CET closes`, compared
-  case-insensitively and trimmed.
-- **Fixed constant** for now. Manual removal or broader configuration may be
-  added later.
+- The aggregation is a **separate function** in the package, not mixed into
+  `read_events`, so it stays reusable by the app and scripts.
+- It operates on the already-filtered events, so ignored names (`CET opens`,
+  `CET closes`) and out-of-range events never reach the sum.
+- Result is sorted by total hours descending.
+- Totals are rounded to 2 decimals.
+
+## Changes
+
+1. **`src/calendar_reader/__init__.py`**
+   - Added `total_hours_by_person(events: list[dict]) -> list[dict]`.
+   - Accumulates `duration_hours` in a dict keyed by `name`, then returns a list
+     of `{"name": str, "total_hours": float}` sorted by `total_hours` descending.
+
+2. **`app/streamlit_app.py`**
+   - Imports `total_hours_by_person` next to `read_events`.
+   - After a successful scan, shows two tables:
+     - `Events` (the raw event list).
+     - `Hours per person` (the aggregated totals).
+
+3. **`README.md`**
+   - Added an "Hours per person" section with a usage example and the return
+     shape.
+
+## Verification
+
+- Temporary ICS with `Alice` (4 h + 2.5 h) and `Bob` (2 h) plus one `CET opens`:
+  output was `Alice 6.5` then `Bob 2.0`, ignoring the `CET opens` event.
+- Regression: `scripts/try_calendar.py` output unchanged.
+- `app/streamlit_app.py` compiles.
+
+## Out of scope
+
+- Rounding/formatting options.
+- Filtering or sorting controls in the UI.

@@ -51,3 +51,13 @@ def read_events(source: str | Path | bytes, date_from: date, date_to: date) -> l
 
     events.sort(key=lambda event: (event["date"], event["start"]))
     return events
+
+
+def total_hours_by_person(events: list[dict]) -> list[dict]:
+    totals: dict[str, float] = {}
+    for event in events:
+        totals[event["name"]] = totals.get(event["name"], 0.0) + event["duration_hours"]
+
+    summary = [{"name": name, "total_hours": round(hours, 2)} for name, hours in totals.items()]
+    summary.sort(key=lambda row: row["total_hours"], reverse=True)
+    return summary
