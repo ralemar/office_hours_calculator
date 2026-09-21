@@ -19,7 +19,9 @@ worker from a user-provided list and aggregate hours per worker, using Jev
   the ICS parsing.
 - Ambiguity rule: mark as `"UNDETERMINED"` when `choice == "other"`,
   `confidence < 0.6`, or the top-2 probability margin is small.
-- The worker list is a parameter for now; its UI is still to be decided.
+- The worker list is uploaded in the web app as `workers.txt` (one name per
+  line), parsed by `workers.parse_workers`. No persistence: the user uploads it
+  each time.
 
 ## Dependency and configuration
 
@@ -58,7 +60,17 @@ worker from a user-provided list and aggregate hours per worker, using Jev
   emitted.
 - Unmatched/ambiguous names are listed separately for the warning
   (`[e["name"] for e in assigned if e["worker"] == "UNDETERMINED"]`).
-- The web app is not wired yet: the worker list source and UX are pending.
+
+## Worker list input (web app)
+
+- `src/calendar_reader/workers.py`: `parse_workers(text) -> list[str]` splits by
+  lines, strips, drops blanks and dedupes (order preserved).
+- `app/streamlit_app.py`: two uploaders (calendar + `workers.txt`), date range,
+  and a "Scan events" button. On scan it reads the API key from
+  `st.secrets["TYPESAFE_API_KEY"]`, calls `assign_workers`, shows the events
+  (with the `worker` column), the hours per worker, and a warning with the
+  `UNDETERMINED` names.
+- No cookies and no extra dependency: the list is uploaded each session.
 
 ## Limits and risks
 
@@ -90,6 +102,6 @@ worker from a user-provided list and aggregate hours per worker, using Jev
 
 ## Out of scope
 
-- Worker-list UI and its persistence.
+- Persisting the worker list (cookies/URL); it is uploaded each time.
 - Manual override mapping for ambiguous names.
 - Automated tests.

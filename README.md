@@ -96,8 +96,10 @@ for row in total_hours_by_person(assigned):
 
 ## Web app
 
-A small Streamlit app lets you upload an `.ics` or `.zip` file and pick the date
-range. Run it from the repository root:
+A small Streamlit app lets you upload an `.ics` or `.zip` calendar and a
+`workers.txt` list (one name per line), pick the date range, and see the events
+matched to each worker plus the total hours per worker. It reads the API key
+from `st.secrets["TYPESAFE_API_KEY"]`. Run it from the repository root:
 
 ```powershell
 uv run streamlit run app/streamlit_app.py
@@ -123,6 +125,7 @@ Fixtures under `tests/fixtures/`:
 | `test_unavailable.ics` | all-day and `mimo`/`pryč` variants to check the filtering |
 | `test_cet_filter.ics` | `CET opens`/`CET closes` markers to check they are skipped |
 | `test_workers.ics` | worker-like names (`Šimon`, `Aneta Š`, ambiguous `Aneta`, unknown `Karel`) for Jev matching |
+| `workers.txt` | reference worker list for `test_workers.ics` (one name per line) |
 
 `scripts/try_workers.py` exercises the Jev matching with an invented worker list.
 The API key is read with Streamlit's native `st.secrets` (`TYPESAFE_API_KEY`):
