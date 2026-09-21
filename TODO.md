@@ -4,6 +4,9 @@
 - Pre select dates.
 - Offer a list of valid names to match (use JEV? / offer to input the good list?)
 - Prepare output.
+- Investigar cómo preconfigurar las cosas (dar nombre válidos)
+- Explorar cómo configurar respuesta (fusionar resultados? eliminar eventos?)
+- El clasificador de jev debería dar output de trabajador pero también de otro tipo de eventos para mostrarlos diferentes.
 
 
 ## DONE
