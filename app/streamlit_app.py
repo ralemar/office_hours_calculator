@@ -2,7 +2,8 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from calendar_reader import read_events, total_hours_by_person
+from calendar_reader.reader import read_events
+from calendar_reader.analytics import total_hours_by_person
 
 st.set_page_config(page_title="ICS Calendar Reader")
 

@@ -2,7 +2,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from calendar_reader import read_events, total_hours_by_person
+from calendar_reader.reader import read_events
+from calendar_reader.analytics import total_hours_by_person
 
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "test_calendar.ics"
 path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_PATH
