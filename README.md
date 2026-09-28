@@ -141,8 +141,13 @@ matched to each worker plus the total hours per worker. The table shows the even
 preselected with the inferred worker), `Duration (From title)` (the Jev-inferred
 duration) and `Duration (Event length)` (from the start/end times), the latter
 two formatted as `3h 25m`. Only `Office hours` events are summed; the others stay
-visible so a wrong category or worker can be fixed. It reads the API key from
-`st.secrets["TYPESAFE_API_KEY"]`. Run it from the repository root:
+visible so a wrong category or worker can be fixed. The grid is
+[`streamlit-aggrid`](https://github.com/PablocFonseca/streamlit-aggrid): rows are
+tinted by category (light yellow `Opening/Closing`, light gray `Exams`, light
+orange `Czechtivity`, light purple `Undetermined`, white `Office hours`) across
+all columns, and the color updates live when you change the category from its
+dropdown. It reads the API key from `st.secrets["TYPESAFE_API_KEY"]`. Run it from
+the repository root:
 
 ```powershell
 uv run streamlit run app/streamlit_app.py

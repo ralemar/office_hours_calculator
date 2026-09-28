@@ -9,7 +9,9 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "icalendar>=7.3.0",
+    "pandas>=3.0.6",
     "streamlit>=1.64.0",
+    "streamlit-aggrid>=1.2.1.post2",
     "typesafe-sdk>=0.7.0",
 ]
 
