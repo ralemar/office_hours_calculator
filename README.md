@@ -98,8 +98,11 @@ for row in total_hours_by_person(assigned):
 
 A small Streamlit app lets you upload an `.ics` or `.zip` calendar and a
 `workers.txt` list (one name per line), pick the date range, and see the events
-matched to each worker plus the total hours per worker. It reads the API key
-from `st.secrets["TYPESAFE_API_KEY"]`. Run it from the repository root:
+matched to each worker plus the total hours per worker. The `worker` column
+(second, next to the event name) is editable through a dropdown, preselected
+with the inferred worker, so a wrong match can be fixed before summing. It reads
+the API key from `st.secrets["TYPESAFE_API_KEY"]`. Run it from the repository
+root:
 
 ```powershell
 uv run streamlit run app/streamlit_app.py

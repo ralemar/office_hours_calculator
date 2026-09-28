@@ -67,9 +67,13 @@ worker from a user-provided list and aggregate hours per worker, using Jev
   lines, strips, drops blanks and dedupes (order preserved).
 - `app/streamlit_app.py`: two uploaders (calendar + `workers.txt`), date range,
   and a "Scan events" button. On scan it reads the API key from
-  `st.secrets["TYPESAFE_API_KEY"]`, calls `assign_workers`, shows the events
-  (with the `worker` column), the hours per worker, and a warning with the
-  `UNDETERMINED` names.
+  `st.secrets["TYPESAFE_API_KEY"]`, calls `assign_workers`, and stores the result
+  in `st.session_state`.
+- The events are shown in an editable `st.data_editor`: the `worker` column is
+  second (next to the name) and is a `SelectboxColumn` preselecting the inferred
+  worker, so the user can correct a wrong match. Only `worker` is editable.
+- Totals come from the edited rows (`total_hours_by_person`), and the
+  `UNDETERMINED` names are warned about.
 - No cookies and no extra dependency: the list is uploaded each session.
 
 ## Limits and risks

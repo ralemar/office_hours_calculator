@@ -43,14 +43,38 @@ if st.button("Scan events"):
         st.error("The 'From' date must be before or equal to the 'To' date.")
     else:
         events = read_events(uploaded.getvalue(), date_from, date_to)
-        if events:
-            assigned = assign_workers(events, workers, api_key)
-            st.subheader("Events")
-            st.dataframe(assigned)
-            st.subheader("Hours per worker")
-            st.dataframe(total_hours_by_person(assigned))
-            undetermined = [e["name"] for e in assigned if e["worker"] == UNDETERMINED]
-            if undetermined:
-                st.warning("Could not determine: " + ", ".join(undetermined))
-        else:
-            st.info("No events found in that date range.")
+        st.session_state["assigned"] = assign_workers(events, workers, api_key)
+        st.session_state["scan_id"] = st.session_state.get("scan_id", 0) + 1
+
+assigned = st.session_state.get("assigned")
+if not assigned:
+    st.info("Scan a calendar to list its events.")
+else:
+    columns = ["name", "worker", "date", "start", "end", "duration_hours"]
+    options = list(
+        dict.fromkeys(workers + [row["worker"] for row in assigned if row["worker"] != UNDETERMINED])
+    )
+    if UNDETERMINED not in options:
+        options.append(UNDETERMINED)
+    edited = st.data_editor(
+        assigned,
+        hide_index=True,
+        column_order=columns,
+        column_config={
+            "worker": st.column_config.SelectboxColumn(
+                "worker",
+                options=options,
+                required=True,
+            ),
+        },
+        disabled=[name for name in columns if name != "worker"],
+        key=f"events_editor_{st.session_state.get('scan_id', 0)}",
+    )
+    rows = edited.to_dict("records") if hasattr(edited, "to_dict") else edited
+
+    st.subheader("Hours per worker")
+    st.dataframe(total_hours_by_person(rows))
+
+    undetermined = [row["name"] for row in rows if row["worker"] == UNDETERMINED]
+    if undetermined:
+        st.warning("Could not determine: " + ", ".join(undetermined))
