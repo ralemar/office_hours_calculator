@@ -109,6 +109,11 @@ worker from a user-provided list and aggregate hours per worker, using Jev
   a **Duration conflicts** section lists each `Office hours` conflict with a radio
   to choose `From title` / `Event length` (stored per event+scan in
   `st.session_state`). Totals use the resolved duration.
+- Two-step workflow: a **Show only Office hours** toggle filters the grid to
+  `Office hours`, so the user reviews the category colors first and then focuses
+  on workers/durations. Category and worker edits are persisted in
+  `st.session_state` (`current_{scan_id}`) so the filter and totals use the user's
+  corrections, not Jev's original categories.
 - Totals come from the returned rows (`total_hours_by_person`); events with an
   `Undetermined` category and unmatched workers are warned about.
 - No cookies: the list is uploaded each session.

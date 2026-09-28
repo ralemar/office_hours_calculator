@@ -83,6 +83,15 @@ if not assigned:
     st.info("Scan a calendar to list its events.")
 else:
     scan_id = st.session_state.get("scan_id", 0)
+    current_key = f"current_{scan_id}"
+    current = st.session_state.get(current_key, {})
+
+    def current_category(index: int) -> str:
+        return current.get(index, {}).get("category") or assigned[index]["category"]
+
+    def current_worker(index: int) -> str:
+        return current.get(index, {}).get("worker") or assigned[index]["worker"]
+
     inferred_minutes = [e["inferred_hours"] * 60 + e["inferred_minutes"] for e in assigned]
     event_minutes = [round(e["duration_hours"] * 60) for e in assigned]
     conflict = [inferred_minutes[i] != event_minutes[i] for i in range(len(assigned))]
@@ -103,74 +112,86 @@ else:
     if UNDETERMINED not in worker_options:
         worker_options.append(UNDETERMINED)
 
-    display = pd.DataFrame(
-        [
-            {
-                "_id": index,
-                "name": row["name"],
-                "category": row["category"],
-                "worker": row["worker"],
-                "Duration": format_minutes(resolved_minutes[index])
-                + (" ⚠️" if conflict[index] and assigned[index]["category"] == OFFICE else ""),
-            }
-            for index, row in enumerate(assigned)
-        ]
+    st.caption(
+        "Step 1: check the category colors and fix them if needed. "
+        "Step 2: toggle below to focus on Office hours (workers and durations)."
+    )
+    office_only = st.toggle(
+        "Show only Office hours",
+        key=f"office_only_{scan_id}",
     )
 
-    grid_builder = GridOptionsBuilder.from_dataframe(display)
-    grid_builder.configure_column("_id", hide=True)
-    grid_builder.configure_column("name", editable=False)
-    grid_builder.configure_column(
-        "category",
-        editable=True,
-        cellEditor="agSelectCellEditor",
-        cellEditorParams={"values": CATEGORIES},
-    )
-    grid_builder.configure_column(
-        "worker",
-        editable=True,
-        cellEditor="agSelectCellEditor",
-        cellEditorParams={"values": worker_options},
-    )
-    grid_builder.configure_column("Duration", editable=False)
-    grid_options = grid_builder.build()
-    grid_options["getRowStyle"] = ROW_STYLE
+    indices = [i for i in range(len(assigned)) if not office_only or current_category(i) == OFFICE]
 
-    response = AgGrid(
-        display,
-        gridOptions=grid_options,
-        update_on=["cellValueChanged"],
-        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-        allow_unsafe_jscode=True,
-        theme="streamlit",
-        height=min(600, 40 * len(display) + 45),
-        key=f"events_grid_{scan_id}",
-    )
-    edited = response.data
-
-    edits = {}
-    for _, edited_row in edited.iterrows():
-        category = edited_row["category"] if isinstance(edited_row["category"], str) else None
-        worker = edited_row["worker"] if isinstance(edited_row["worker"], str) else None
-        edits[int(edited_row["_id"])] = (category, worker)
-
-    office_ids = []
-    rows = []
-    for index, original in enumerate(assigned):
-        category, worker = edits.get(index, (None, None))
-        category = category or original["category"]
-        rows.append(
-            {
-                **original,
-                "category": category,
-                "worker": worker or original["worker"],
-                "duration_hours": resolved_minutes[index] / 60,
-            }
+    if not indices:
+        st.info("No Office hours events to show.")
+    else:
+        display = pd.DataFrame(
+            [
+                {
+                    "_id": index,
+                    "name": assigned[index]["name"],
+                    "category": current_category(index),
+                    "worker": current_worker(index),
+                    "Duration": format_minutes(resolved_minutes[index])
+                    + (" ⚠️" if conflict[index] and current_category(index) == OFFICE else ""),
+                }
+                for index in indices
+            ]
         )
-        if category == OFFICE:
-            office_ids.append(index)
 
-    conflicts = [index for index in office_ids if conflict[index]]
+        grid_builder = GridOptionsBuilder.from_dataframe(display)
+        grid_builder.configure_column("_id", hide=True)
+        grid_builder.configure_column("name", editable=False)
+        grid_builder.configure_column(
+            "category",
+            editable=True,
+            cellEditor="agSelectCellEditor",
+            cellEditorParams={"values": CATEGORIES},
+        )
+        grid_builder.configure_column(
+            "worker",
+            editable=True,
+            cellEditor="agSelectCellEditor",
+            cellEditorParams={"values": worker_options},
+        )
+        grid_builder.configure_column("Duration", editable=False)
+        grid_options = grid_builder.build()
+        grid_options["getRowStyle"] = ROW_STYLE
+
+        response = AgGrid(
+            display,
+            gridOptions=grid_options,
+            update_on=["cellValueChanged"],
+            data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+            allow_unsafe_jscode=True,
+            theme="streamlit",
+            height=min(600, 40 * len(display) + 45),
+            key=f"events_grid_{scan_id}_{int(office_only)}",
+        )
+
+        for _, edited_row in response.data.iterrows():
+            index = int(edited_row["_id"])
+            entry = current.setdefault(index, {})
+            category = edited_row["category"] if isinstance(edited_row["category"], str) else None
+            worker = edited_row["worker"] if isinstance(edited_row["worker"], str) else None
+            if category:
+                entry["category"] = category
+            if worker:
+                entry["worker"] = worker
+        st.session_state[current_key] = current
+
+    rows = [
+        {
+            **original,
+            "category": current_category(index),
+            "worker": current_worker(index),
+            "duration_hours": resolved_minutes[index] / 60,
+        }
+        for index, original in enumerate(assigned)
+    ]
+
+    conflicts = [index for index in range(len(assigned)) if current_category(index) == OFFICE and conflict[index]]
     if conflicts:
         with st.expander(f"Duration conflicts ({len(conflicts)})", expanded=True):
             st.caption(
@@ -178,7 +199,10 @@ else:
                 "from the event length. Default: the duration from the title."
             )
             for index in conflicts:
-                st.markdown(f"**{assigned[index]['name']}** — {format_minutes(inferred_minutes[index])} vs {format_minutes(event_minutes[index])}")
+                st.markdown(
+                    f"**{assigned[index]['name']}** — "
+                    f"{format_minutes(inferred_minutes[index])} vs {format_minutes(event_minutes[index])}"
+                )
 
                 def label(value, index=index):
                     minutes = inferred_minutes[index] if value == FROM_TITLE else event_minutes[index]

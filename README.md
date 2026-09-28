@@ -148,8 +148,10 @@ orange `Czechtivity`, light purple `Undetermined`, white `Office hours`) across
 all columns, and the color updates live when you change the category from its
 dropdown. When the title duration differs from the event length, the `Duration`
 cell shows a danger emoji (`⚠️`) and a **Duration conflicts** section appears where
-you pick which one to use (default: from the title). It reads the API key from
-`st.secrets["TYPESAFE_API_KEY"]`. Run it from the repository root:
+you pick which one to use (default: from the title). A **Show only Office hours**
+toggle lets you review the categories first and then hide the rest to focus on
+workers and durations; category/worker edits are kept when toggling. It reads the
+API key from `st.secrets["TYPESAFE_API_KEY"]`. Run it from the repository root:
 
 ```powershell
 uv run streamlit run app/streamlit_app.py
