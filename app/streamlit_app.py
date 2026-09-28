@@ -121,7 +121,8 @@ else:
         key=f"office_only_{scan_id}",
     )
 
-    indices = [i for i in range(len(assigned)) if not office_only or current_category(i) == OFFICE]
+    order = sorted(range(len(assigned)), key=lambda i: (assigned[i]["date"], assigned[i]["start"]))
+    indices = [index for index in order if not office_only or current_category(index) == OFFICE]
 
     if not indices:
         st.info("No Office hours events to show.")
@@ -130,6 +131,7 @@ else:
             [
                 {
                     "_id": index,
+                    "Date": assigned[index]["date"].isoformat(),
                     "name": assigned[index]["name"],
                     "category": current_category(index),
                     "worker": current_worker(index),
@@ -142,6 +144,7 @@ else:
 
         grid_builder = GridOptionsBuilder.from_dataframe(display)
         grid_builder.configure_column("_id", hide=True)
+        grid_builder.configure_column("Date", editable=False, sort="asc")
         grid_builder.configure_column("name", editable=False)
         grid_builder.configure_column(
             "category",
@@ -191,7 +194,7 @@ else:
         for index, original in enumerate(assigned)
     ]
 
-    conflicts = [index for index in range(len(assigned)) if current_category(index) == OFFICE and conflict[index]]
+    conflicts = [index for index in order if current_category(index) == OFFICE and conflict[index]]
     if conflicts:
         with st.expander(f"Duration conflicts ({len(conflicts)})", expanded=True):
             st.caption(
@@ -200,7 +203,7 @@ else:
             )
             for index in conflicts:
                 st.markdown(
-                    f"**{assigned[index]['name']}** — "
+                    f"**{assigned[index]['date'].isoformat()} — {assigned[index]['name']}** — "
                     f"{format_minutes(inferred_minutes[index])} vs {format_minutes(event_minutes[index])}"
                 )
 

@@ -137,9 +137,10 @@ If the API fails, it warns and every event gets `0`/`0`.
 A small Streamlit app lets you upload an `.ics` or `.zip` calendar and a
 `workers.txt` list (one name per line), pick the date range, and see the events
 matched to each worker plus the total hours per worker. The grid shows the event
-`name`, the `category` (editable dropdown), the `worker` (editable dropdown,
-preselected with the inferred worker) and a single `Duration` (the Jev-inferred
-duration from the title by default, formatted `3h 25m`). Only `Office hours`
+`Date` (leftmost, and the grid is ordered by it), `name`, the `category` (editable
+dropdown), the `worker` (editable dropdown, preselected with the inferred worker)
+and a single `Duration` (the Jev-inferred duration from the title by default,
+formatted `3h 25m`). Only `Office hours`
 events are summed; the others stay visible so a wrong category or worker can be
 fixed. The grid is
 [`streamlit-aggrid`](https://github.com/PablocFonseca/streamlit-aggrid): rows are

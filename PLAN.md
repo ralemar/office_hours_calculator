@@ -94,11 +94,12 @@ worker from a user-provided list and aggregate hours per worker, using Jev
   and a "Scan events" button. On scan it reads the API key from
   `st.secrets["TYPESAFE_API_KEY"]`, calls `categorize`, `assign_workers` and
   `assign_durations`, and stores the result in `st.session_state`.
-- The events are shown in a `streamlit-aggrid` `AgGrid` with columns `name`,
-  `category`, `worker` and a single `Duration` (the Jev-inferred duration from the
-  title by default, `3h 25m`). `category` and `worker` are editable with an
-  `agSelectCellEditor` dropdown (preselected), so the user can correct a wrong
-  category or match; the rest is read-only. Totals only count `Office hours`.
+- The events are shown in a `streamlit-aggrid` `AgGrid` with columns `Date`
+  (leftmost, the grid is sorted by it), `name`, `category`, `worker` and a single
+  `Duration` (the Jev-inferred duration from the title by default, `3h 25m`).
+  `category` and `worker` are editable with an `agSelectCellEditor` dropdown
+  (preselected), so the user can correct a wrong category or match; the rest is
+  read-only. Totals only count `Office hours`.
 - Rows are tinted by category with a `getRowStyle` JS callback (light yellow
   `Opening/Closing`, light gray `Exams`, light orange `Czechtivity`, light purple
   `Undetermined`, white `Office hours`); the whole row is tinted (editable columns
