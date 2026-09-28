@@ -95,10 +95,8 @@ worker from a user-provided list and aggregate hours per worker, using Jev
   `st.secrets["TYPESAFE_API_KEY"]`, calls `categorize`, `assign_workers` and
   `assign_durations`, and stores the result in `st.session_state`.
 - The events are shown in a `streamlit-aggrid` `AgGrid` with columns `name`,
-  `category`, `worker`, `Duration (From title)` and `Duration (Event length)`.
-  Durations are formatted `3h 25m`: `From title` is the Jev-inferred duration
-  (`inferred_hours`/`inferred_minutes`), `Event length` is from the start/end
-  times (`duration_hours`). `category` and `worker` are editable with an
+  `category`, `worker` and a single `Duration` (the Jev-inferred duration from the
+  title by default, `3h 25m`). `category` and `worker` are editable with an
   `agSelectCellEditor` dropdown (preselected), so the user can correct a wrong
   category or match; the rest is read-only. Totals only count `Office hours`.
 - Rows are tinted by category with a `getRowStyle` JS callback (light yellow
@@ -106,6 +104,11 @@ worker from a user-provided list and aggregate hours per worker, using Jev
   `Undetermined`, white `Office hours`); the whole row is tinted (editable columns
   included) and the color updates live on edit. A hidden `_id` column maps the
   returned rows back to the events.
+- Resolved duration: inferred by default. When the title duration and the event
+  length differ (any minute), the `Duration` cell shows a danger emoji (`⚠️`) and
+  a **Duration conflicts** section lists each `Office hours` conflict with a radio
+  to choose `From title` / `Event length` (stored per event+scan in
+  `st.session_state`). Totals use the resolved duration.
 - Totals come from the returned rows (`total_hours_by_person`); events with an
   `Undetermined` category and unmatched workers are warned about.
 - No cookies: the list is uploaded each session.

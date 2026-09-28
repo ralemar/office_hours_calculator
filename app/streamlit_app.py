@@ -20,6 +20,9 @@ CATEGORY_COLORS = {
     CATEGORY_UNDETERMINED: "#E1BEE7",
 }
 
+FROM_TITLE = "From title"
+EVENT_LENGTH = "Event length"
+
 ROW_STYLE = JsCode(
     "function(params) {"
     f"var colors = {json.dumps(CATEGORY_COLORS)};"
@@ -79,6 +82,21 @@ assigned = st.session_state.get("assigned")
 if not assigned:
     st.info("Scan a calendar to list its events.")
 else:
+    scan_id = st.session_state.get("scan_id", 0)
+    inferred_minutes = [e["inferred_hours"] * 60 + e["inferred_minutes"] for e in assigned]
+    event_minutes = [round(e["duration_hours"] * 60) for e in assigned]
+    conflict = [inferred_minutes[i] != event_minutes[i] for i in range(len(assigned))]
+
+    def choice_key(index: int) -> str:
+        return f"duration_choice_{scan_id}_{index}"
+
+    resolved_minutes = []
+    for index in range(len(assigned)):
+        if st.session_state.get(choice_key(index)) == EVENT_LENGTH:
+            resolved_minutes.append(event_minutes[index])
+        else:
+            resolved_minutes.append(inferred_minutes[index])
+
     worker_options = list(
         dict.fromkeys(workers + [row["worker"] for row in assigned if row["worker"] != UNDETERMINED])
     )
@@ -92,10 +110,8 @@ else:
                 "name": row["name"],
                 "category": row["category"],
                 "worker": row["worker"],
-                "Duration (From title)": format_minutes(
-                    row["inferred_hours"] * 60 + row["inferred_minutes"]
-                ),
-                "Duration (Event length)": format_minutes(round(row["duration_hours"] * 60)),
+                "Duration": format_minutes(resolved_minutes[index])
+                + (" ⚠️" if conflict[index] and assigned[index]["category"] == OFFICE else ""),
             }
             for index, row in enumerate(assigned)
         ]
@@ -116,8 +132,7 @@ else:
         cellEditor="agSelectCellEditor",
         cellEditorParams={"values": worker_options},
     )
-    grid_builder.configure_column("Duration (From title)", editable=False)
-    grid_builder.configure_column("Duration (Event length)", editable=False)
+    grid_builder.configure_column("Duration", editable=False)
     grid_options = grid_builder.build()
     grid_options["getRowStyle"] = ROW_STYLE
 
@@ -129,7 +144,7 @@ else:
         allow_unsafe_jscode=True,
         theme="streamlit",
         height=min(600, 40 * len(display) + 45),
-        key=f"events_grid_{st.session_state.get('scan_id', 0)}",
+        key=f"events_grid_{scan_id}",
     )
     edited = response.data
 
@@ -139,24 +154,53 @@ else:
         worker = edited_row["worker"] if isinstance(edited_row["worker"], str) else None
         edits[int(edited_row["_id"])] = (category, worker)
 
+    office_ids = []
     rows = []
     for index, original in enumerate(assigned):
         category, worker = edits.get(index, (None, None))
+        category = category or original["category"]
         rows.append(
             {
                 **original,
-                "category": category or original["category"],
+                "category": category,
                 "worker": worker or original["worker"],
+                "duration_hours": resolved_minutes[index] / 60,
             }
         )
+        if category == OFFICE:
+            office_ids.append(index)
 
-    office = [row for row in rows if row["category"] == OFFICE]
+    conflicts = [index for index in office_ids if conflict[index]]
+    if conflicts:
+        with st.expander(f"Duration conflicts ({len(conflicts)})", expanded=True):
+            st.caption(
+                f"{len(conflicts)} office-hours event(s) where the title duration differs "
+                "from the event length. Default: the duration from the title."
+            )
+            for index in conflicts:
+                st.markdown(f"**{assigned[index]['name']}** — {format_minutes(inferred_minutes[index])} vs {format_minutes(event_minutes[index])}")
+
+                def label(value, index=index):
+                    minutes = inferred_minutes[index] if value == FROM_TITLE else event_minutes[index]
+                    return f"{value} ({format_minutes(minutes)})"
+
+                st.radio(
+                    "Duration to use",
+                    options=[FROM_TITLE, EVENT_LENGTH],
+                    index=0 if st.session_state.get(choice_key(index)) != EVENT_LENGTH else 1,
+                    format_func=label,
+                    key=choice_key(index),
+                    horizontal=True,
+                    label_visibility="collapsed",
+                )
+
     st.subheader("Hours per worker")
-    st.dataframe(total_hours_by_person(office))
+    office_rows = [row for row in rows if row["category"] == OFFICE]
+    st.dataframe(total_hours_by_person(office_rows))
 
     unknown_category = [row["name"] for row in rows if row["category"] == CATEGORY_UNDETERMINED]
     if unknown_category:
         st.warning("Undetermined category: " + ", ".join(unknown_category))
-    unmatched = [row["name"] for row in office if row["worker"] == UNDETERMINED]
+    unmatched = [row["name"] for row in rows if row["category"] == OFFICE and row["worker"] == UNDETERMINED]
     if unmatched:
         st.warning("Could not determine worker: " + ", ".join(unmatched))

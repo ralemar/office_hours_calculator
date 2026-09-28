@@ -136,18 +136,20 @@ If the API fails, it warns and every event gets `0`/`0`.
 
 A small Streamlit app lets you upload an `.ics` or `.zip` calendar and a
 `workers.txt` list (one name per line), pick the date range, and see the events
-matched to each worker plus the total hours per worker. The table shows the event
+matched to each worker plus the total hours per worker. The grid shows the event
 `name`, the `category` (editable dropdown), the `worker` (editable dropdown,
-preselected with the inferred worker), `Duration (From title)` (the Jev-inferred
-duration) and `Duration (Event length)` (from the start/end times), the latter
-two formatted as `3h 25m`. Only `Office hours` events are summed; the others stay
-visible so a wrong category or worker can be fixed. The grid is
+preselected with the inferred worker) and a single `Duration` (the Jev-inferred
+duration from the title by default, formatted `3h 25m`). Only `Office hours`
+events are summed; the others stay visible so a wrong category or worker can be
+fixed. The grid is
 [`streamlit-aggrid`](https://github.com/PablocFonseca/streamlit-aggrid): rows are
 tinted by category (light yellow `Opening/Closing`, light gray `Exams`, light
 orange `Czechtivity`, light purple `Undetermined`, white `Office hours`) across
 all columns, and the color updates live when you change the category from its
-dropdown. It reads the API key from `st.secrets["TYPESAFE_API_KEY"]`. Run it from
-the repository root:
+dropdown. When the title duration differs from the event length, the `Duration`
+cell shows a danger emoji (`⚠️`) and a **Duration conflicts** section appears where
+you pick which one to use (default: from the title). It reads the API key from
+`st.secrets["TYPESAFE_API_KEY"]`. Run it from the repository root:
 
 ```powershell
 uv run streamlit run app/streamlit_app.py
