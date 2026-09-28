@@ -188,6 +188,14 @@ Fixtures under `tests/fixtures/`:
 | `test_durations.ics` | duration texts with minutes (`3h 30m`, `45 min`, `1.5h`, `90 min`, `2:45`, `0h 25m`, no duration) for Jev duration inference |
 | `workers_durations.txt` | reference worker list for `test_durations.ics` (one name per line) |
 | `test_categories.ics` | one event of each Jev category; the `Czechtivity` events also carry a worker name (`... - Alice`, `... - Simon`) to check they are not mistaken for `Office hours` |
+| `test_big.ics` | a full month (September 2026, ~124 events, 3-4/day) with all cases and 16 workers, to see the table with lots of data |
+| `workers_big.txt` | reference worker list for `test_big.ics` (16 names) |
+
+`scripts/generate_test_big.py` regenerates `test_big.ics` and `workers_big.txt`:
+
+```powershell
+uv run python scripts/generate_test_big.py
+```
 
 `scripts/try_workers.py` exercises the Jev matching with an invented worker list.
 `scripts/try_durations.py` exercises the duration inference.
