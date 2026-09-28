@@ -11,15 +11,11 @@ from icalendar import Calendar
 
 MADRID = ZoneInfo("Europe/Madrid")
 
-IGNORED_NAMES = {"cet opens", "cet closes"}
 UNAVAILABLE_PATTERN = re.compile(r"\b(mimo|pryc)\b")
 
 
 def _is_unavailable(name: str) -> bool:
-    folded = name.casefold()
-    if folded in IGNORED_NAMES:
-        return True
-    ascii_name = unicodedata.normalize("NFKD", folded).encode("ascii", "ignore").decode()
+    ascii_name = unicodedata.normalize("NFKD", name.casefold()).encode("ascii", "ignore").decode()
     return UNAVAILABLE_PATTERN.search(ascii_name) is not None
 
 

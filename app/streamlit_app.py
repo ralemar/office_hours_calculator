@@ -4,6 +4,8 @@ import streamlit as st
 
 from calendar_reader.reader import read_events
 from calendar_reader.analytics import total_hours_by_person
+from calendar_reader.categories import CATEGORIES, OFFICE, categorize
+from calendar_reader.categories import UNDETERMINED as CATEGORY_UNDETERMINED
 from calendar_reader.durations import assign_durations
 from calendar_reader.matching import UNDETERMINED, assign_workers
 from calendar_reader.workers import parse_workers
@@ -50,7 +52,8 @@ if st.button("Scan events"):
         st.error("The 'From' date must be before or equal to the 'To' date.")
     else:
         events = read_events(uploaded.getvalue(), date_from, date_to)
-        assigned = assign_workers(events, workers, api_key)
+        categorized = categorize(events, api_key)
+        assigned = assign_workers(categorized, workers, api_key)
         st.session_state["assigned"] = assign_durations(assigned, api_key)
         st.session_state["scan_id"] = st.session_state.get("scan_id", 0) + 1
 
@@ -58,7 +61,7 @@ assigned = st.session_state.get("assigned")
 if not assigned:
     st.info("Scan a calendar to list its events.")
 else:
-    columns = ["name", "worker", "Duration (From title)", "Duration (Event length)"]
+    columns = ["name", "category", "worker", "Duration (From title)", "Duration (Event length)"]
     options = list(
         dict.fromkeys(workers + [row["worker"] for row in assigned if row["worker"] != UNDETERMINED])
     )
@@ -68,6 +71,7 @@ else:
     display = [
         {
             "name": row["name"],
+            "category": row["category"],
             "worker": row["worker"],
             "Duration (From title)": format_minutes(
                 row["inferred_hours"] * 60 + row["inferred_minutes"]
@@ -82,24 +86,33 @@ else:
         hide_index=True,
         column_order=columns,
         column_config={
+            "category": st.column_config.SelectboxColumn(
+                "category",
+                options=CATEGORIES,
+                required=True,
+            ),
             "worker": st.column_config.SelectboxColumn(
                 "worker",
                 options=options,
                 required=True,
             ),
         },
-        disabled=[name for name in columns if name != "worker"],
+        disabled=[name for name in columns if name not in ("category", "worker")],
         key=f"events_editor_{st.session_state.get('scan_id', 0)}",
     )
     edited_rows = edited.to_dict("records") if hasattr(edited, "to_dict") else edited
     rows = [
-        {**original, "worker": edited_row["worker"]}
+        {**original, "category": edited_row["category"], "worker": edited_row["worker"]}
         for original, edited_row in zip(assigned, edited_rows)
     ]
 
+    office = [row for row in rows if row["category"] == OFFICE]
     st.subheader("Hours per worker")
-    st.dataframe(total_hours_by_person(rows))
+    st.dataframe(total_hours_by_person(office))
 
-    undetermined = [row["name"] for row in rows if row["worker"] == UNDETERMINED]
-    if undetermined:
-        st.warning("Could not determine: " + ", ".join(undetermined))
+    unknown_category = [row["name"] for row in rows if row["category"] == CATEGORY_UNDETERMINED]
+    if unknown_category:
+        st.warning("Undetermined category: " + ", ".join(unknown_category))
+    unmatched = [row["name"] for row in office if row["worker"] == UNDETERMINED]
+    if unmatched:
+        st.warning("Could not determine worker: " + ", ".join(unmatched))

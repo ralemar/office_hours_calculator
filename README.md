@@ -33,10 +33,30 @@ The range is inclusive: from 00:00 of `date_from` to 23:59 of `date_to`, and it
 is filtered by the event's start date. Times are returned converted to
 `Europe/Madrid`.
 
-Events named `CET opens` or `CET closes` (case-insensitive, surrounding spaces
-ignored) are skipped, as are events whose name contains the standalone word
-`mimo` or `pryč` (any diacritics, e.g. `pryc`/`pryč`; surrounded only by
-non-letters such as spaces or parentheses). All-day events are always skipped.
+Events whose name contains the standalone word `mimo` or `pryč` (any diacritics,
+e.g. `pryc`/`pryč`; surrounded only by non-letters such as spaces or parentheses)
+are skipped. All-day events are always skipped. Everything else (including
+`CET opens`/`CET closes`, `Czechtivity` and `Cz exams`) is returned and later
+categorized by Jev.
+
+## Categorizing events (Jev)
+
+`categorize(events, api_key)` labels every event with one `category`:
+
+- `Opening/Closing`: daily `CET opens` / `CET closes` markers.
+- `Exams`: `Cz exams` events.
+- `Czechtivity`: `Czechtivity` activities.
+- `Office hours`: a worker's office hours (the ones to analyze).
+- `Undetermined`: anything else.
+
+```python
+from calendar_reader.categories import categorize
+
+events = categorize(events, st.secrets["TYPESAFE_API_KEY"])
+```
+
+Only `Office hours` events are summed; the rest are still shown in the app so the
+user can fix a wrong category. On API failure every event becomes `Undetermined`.
 
 ## Hours per person
 
@@ -117,11 +137,12 @@ If the API fails, it warns and every event gets `0`/`0`.
 A small Streamlit app lets you upload an `.ics` or `.zip` calendar and a
 `workers.txt` list (one name per line), pick the date range, and see the events
 matched to each worker plus the total hours per worker. The table shows the event
-name, the `worker` (editable through a dropdown, preselected with the inferred
-worker), `Duration (From title)` (the Jev-inferred duration) and
-`Duration (Event length)` (from the start/end times), the latter two formatted as
-`3h 25m`. It reads the API key from `st.secrets["TYPESAFE_API_KEY"]`. Run it from
-the repository root:
+`name`, the `category` (editable dropdown), the `worker` (editable dropdown,
+preselected with the inferred worker), `Duration (From title)` (the Jev-inferred
+duration) and `Duration (Event length)` (from the start/end times), the latter
+two formatted as `3h 25m`. Only `Office hours` events are summed; the others stay
+visible so a wrong category or worker can be fixed. It reads the API key from
+`st.secrets["TYPESAFE_API_KEY"]`. Run it from the repository root:
 
 ```powershell
 uv run streamlit run app/streamlit_app.py
@@ -145,19 +166,22 @@ Fixtures under `tests/fixtures/`:
 | `test_calendar.zip` | a compressed calendar, to check `.zip` input |
 | `test_hours.ics` | same person across days to check the totals (`Alice` 6.5 h, `Bob` 2 h) |
 | `test_unavailable.ics` | all-day and `mimo`/`pryč` variants to check the filtering |
-| `test_cet_filter.ics` | `CET opens`/`CET closes` markers to check they are skipped |
+| `test_cet_filter.ics` | `CET opens`/`CET closes` markers (now categorized, not skipped) |
 | `test_workers.ics` | worker-like names (`Šimon`, `Aneta Š`, ambiguous `Aneta`, unknown `Karel`) for Jev matching |
 | `workers.txt` | reference worker list for `test_workers.ics` (one name per line) |
 | `test_durations.ics` | duration texts with minutes (`3h 30m`, `45 min`, `1.5h`, `90 min`, `2:45`, `0h 25m`, no duration) for Jev duration inference |
 | `workers_durations.txt` | reference worker list for `test_durations.ics` (one name per line) |
+| `test_categories.ics` | one event of each Jev category; the `Czechtivity` events also carry a worker name (`... - Alice`, `... - Simon`) to check they are not mistaken for `Office hours` |
 
 `scripts/try_workers.py` exercises the Jev matching with an invented worker list.
-`scripts/try_durations.py` exercises the duration inference. The API key is read
+`scripts/try_durations.py` exercises the duration inference.
+`scripts/try_categories.py` exercises the categorization. The API key is read
 with Streamlit's native `st.secrets` (`TYPESAFE_API_KEY`):
 
 ```powershell
 uv run python scripts/try_workers.py
 uv run python scripts/try_durations.py
+uv run python scripts/try_categories.py
 ```
 
 ## Limitations

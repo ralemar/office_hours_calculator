@@ -61,6 +61,19 @@ worker from a user-provided list and aggregate hours per worker, using Jev
 - Unmatched/ambiguous names are listed separately for the warning
   (`[e["name"] for e in assigned if e["worker"] == "UNDETERMINED"]`).
 
+## Categorization (Jev)
+
+- `src/calendar_reader/categories.py`: `categorize(events, api_key)` labels every
+  event with one `category` via a `Choice` question:
+  - `Opening/Closing` (daily `CET opens`/`CET closes`), `Exams` (`Cz exams`),
+    `Czechtivity`, `Office hours`, `Undetermined`.
+- The hardcoded `CET opens`/`CET closes` filter was removed from `reader.py` so
+  those events reach the categorizer and can be shown (all-day events are still
+  dropped, and `mimo`/`pryč` are still skipped).
+- On API failure every event becomes `Undetermined`.
+- Only `Office hours` events are analyzed; the rest are shown so the user can fix
+  the category (or the worker) in the app.
+
 ## Duration inference (Jev)
 
 - Users sometimes edit the event text (the `DESCRIPTION`, falling back to the
@@ -79,17 +92,17 @@ worker from a user-provided list and aggregate hours per worker, using Jev
   lines, strips, drops blanks and dedupes (order preserved).
 - `app/streamlit_app.py`: two uploaders (calendar + `workers.txt`), date range,
   and a "Scan events" button. On scan it reads the API key from
-  `st.secrets["TYPESAFE_API_KEY"]`, calls `assign_workers` and `assign_durations`,
-  and stores the result in `st.session_state`.
+  `st.secrets["TYPESAFE_API_KEY"]`, calls `categorize`, `assign_workers` and
+  `assign_durations`, and stores the result in `st.session_state`.
 - The events are shown in an editable `st.data_editor` with columns `name`,
-  `worker`, `Duration (From title)` and `Duration (Event length)`. Durations are
-  formatted `3h 25m`: `From title` is the Jev-inferred duration
+  `category`, `worker`, `Duration (From title)` and `Duration (Event length)`.
+  Durations are formatted `3h 25m`: `From title` is the Jev-inferred duration
   (`inferred_hours`/`inferred_minutes`), `Event length` is from the start/end
-  times (`duration_hours`). The `worker` column is a `SelectboxColumn`
-  preselecting the inferred worker, so the user can correct a wrong match; the
-  rest is read-only.
-- Totals come from the edited rows (`total_hours_by_person`), and the
-  `UNDETERMINED` names are warned about.
+  times (`duration_hours`). `category` and `worker` are `SelectboxColumn`s
+  (preselected), so the user can correct a wrong category or match; the rest is
+  read-only. Totals only count `Office hours` events.
+- Totals come from the edited rows (`total_hours_by_person`); events with an
+  `Undetermined` category and unmatched workers are warned about.
 - No cookies and no extra dependency: the list is uploaded each session.
 
 ## Limits and risks
