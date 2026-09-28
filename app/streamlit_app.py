@@ -223,7 +223,31 @@ else:
 
     st.subheader("Hours per worker")
     office_rows = [row for row in rows if row["category"] == OFFICE]
-    st.dataframe(total_hours_by_person(office_rows))
+    summary = total_hours_by_person(office_rows)
+    st.dataframe(summary)
+
+    st.subheader("Copy to Excel")
+    totals_by_worker = {row["name"]: row["total_hours"] for row in summary}
+    worker_names = list(workers)
+    worker_hours = [totals_by_worker.get(name, 0.0) for name in worker_names]
+
+    if not worker_names:
+        st.info("No workers to show.")
+    else:
+        st.dataframe(pd.DataFrame([worker_hours], columns=worker_names), hide_index=True)
+
+        separator = "\t"
+        copy_values = separator.join(worker_names) + "\n" + separator.join(f"{hours:g}" for hours in worker_hours)
+        st.caption("Copy the block and paste it into Excel (tab-separated, ordered as in the workers file).")
+        st.code(copy_values, language="text")
+
+        csv_values = ",".join(worker_names) + "\n" + ",".join(f"{hours:g}" for hours in worker_hours)
+        st.download_button(
+            "Download CSV",
+            csv_values,
+            file_name="worker_hours.csv",
+            mime="text/csv",
+        )
 
     unknown_category = [row["name"] for row in rows if row["category"] == CATEGORY_UNDETERMINED]
     if unknown_category:

@@ -115,8 +115,13 @@ worker from a user-provided list and aggregate hours per worker, using Jev
   on workers/durations. Category and worker edits are persisted in
   `st.session_state` (`current_{scan_id}`) so the filter and totals use the user's
   corrections, not Jev's original categories.
-- Totals come from the returned rows (`total_hours_by_person`); events with an
-  `Undetermined` category and unmatched workers are warned about.
+- Totals come from the returned rows (`total_hours_by_person`).
+- Two outputs (different purposes): **Hours per worker** (per-worker summary
+  table, to *see* the result) and **Copy to Excel** (a transposed table with two
+  rows: worker names, then total hours, ordered as in the `workers.txt` file, `0`
+  for workers without hours; plus a **tab-separated `st.code` block with a copy
+  button** to paste straight into Excel and a **CSV download button**).
+- Events with an `Undetermined` category and unmatched workers are warned about.
 - No cookies: the list is uploaded each session.
 
 ## Limits and risks
