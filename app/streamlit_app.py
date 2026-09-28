@@ -37,10 +37,14 @@ def format_minutes(total_minutes: int) -> str:
     return f"{hours}h {minutes}m"
 
 
-st.set_page_config(page_title="ICS Calendar Reader")
+st.set_page_config(page_title="Office hours calculator")
 
-st.title("ICS Calendar Reader")
-st.write("Upload an .ics or .zip calendar, a workers list, and pick a date range.")
+st.title("Office hours calculator")
+st.write(
+    "Upload your calendar and the workers list, pick the dates, and we'll total the "
+    "office hours per worker. Fine-tune anything that looks off, then copy the "
+    "numbers into Excel."
+)
 
 uploaded = st.file_uploader("Upload your .ics or .zip calendar", type=["ics", "zip"])
 
@@ -132,8 +136,8 @@ else:
                 {
                     "_id": index,
                     "Date": assigned[index]["date"].isoformat(),
-                    "name": assigned[index]["name"],
                     "category": current_category(index),
+                    "name": assigned[index]["name"],
                     "worker": current_worker(index),
                     "Duration": format_minutes(resolved_minutes[index])
                     + (" ⚠️" if conflict[index] and current_category(index) == OFFICE else ""),
@@ -144,21 +148,24 @@ else:
 
         grid_builder = GridOptionsBuilder.from_dataframe(display)
         grid_builder.configure_column("_id", hide=True)
-        grid_builder.configure_column("Date", editable=False, sort="asc")
-        grid_builder.configure_column("name", editable=False)
+        grid_builder.configure_column("Date", editable=False, sort="asc", width=110, minWidth=100)
         grid_builder.configure_column(
             "category",
+            hide=office_only,
             editable=True,
+            width=170,
             cellEditor="agSelectCellEditor",
             cellEditorParams={"values": CATEGORIES},
         )
+        grid_builder.configure_column("name", editable=False, flex=1, minWidth=200)
         grid_builder.configure_column(
             "worker",
             editable=True,
+            width=150,
             cellEditor="agSelectCellEditor",
             cellEditorParams={"values": worker_options},
         )
-        grid_builder.configure_column("Duration", editable=False)
+        grid_builder.configure_column("Duration", editable=False, width=120)
         grid_options = grid_builder.build()
         grid_options["getRowStyle"] = ROW_STYLE
 
