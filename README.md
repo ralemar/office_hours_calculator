@@ -94,15 +94,34 @@ for row in total_hours_by_person(assigned):
   script, e.g. from `st.secrets`) passes it in. If the API fails, events are left
   unmatched and a warning is emitted.
 
+## Inferring the duration from the event text (Jev)
+
+Sometimes the event text (the `DESCRIPTION`, falling back to the name) states the
+hours to register even when the start/end times do not match. `assign_durations`
+asks Jev two Choice questions per event: whole **hours** (0-12) and **minutes**
+(0-60 in steps of 5), and adds `inferred_hours` and `inferred_minutes` to each
+event:
+
+```python
+from calendar_reader.durations import assign_durations
+
+assigned = assign_durations(assigned, st.secrets["TYPESAFE_API_KEY"])
+for event in assigned:
+    print(event["name"], event["inferred_hours"], "h", event["inferred_minutes"], "m")
+```
+
+If the API fails, it warns and every event gets `0`/`0`.
+
 ## Web app
 
 A small Streamlit app lets you upload an `.ics` or `.zip` calendar and a
 `workers.txt` list (one name per line), pick the date range, and see the events
-matched to each worker plus the total hours per worker. The `worker` column
-(second, next to the event name) is editable through a dropdown, preselected
-with the inferred worker, so a wrong match can be fixed before summing. It reads
-the API key from `st.secrets["TYPESAFE_API_KEY"]`. Run it from the repository
-root:
+matched to each worker plus the total hours per worker. The table shows the event
+name, the `worker` (editable through a dropdown, preselected with the inferred
+worker), `Duration (From title)` (the Jev-inferred duration) and
+`Duration (Event length)` (from the start/end times), the latter two formatted as
+`3h 25m`. It reads the API key from `st.secrets["TYPESAFE_API_KEY"]`. Run it from
+the repository root:
 
 ```powershell
 uv run streamlit run app/streamlit_app.py
@@ -129,12 +148,16 @@ Fixtures under `tests/fixtures/`:
 | `test_cet_filter.ics` | `CET opens`/`CET closes` markers to check they are skipped |
 | `test_workers.ics` | worker-like names (`Šimon`, `Aneta Š`, ambiguous `Aneta`, unknown `Karel`) for Jev matching |
 | `workers.txt` | reference worker list for `test_workers.ics` (one name per line) |
+| `test_durations.ics` | duration texts with minutes (`3h 30m`, `45 min`, `1.5h`, `90 min`, `2:45`, `0h 25m`, no duration) for Jev duration inference |
+| `workers_durations.txt` | reference worker list for `test_durations.ics` (one name per line) |
 
 `scripts/try_workers.py` exercises the Jev matching with an invented worker list.
-The API key is read with Streamlit's native `st.secrets` (`TYPESAFE_API_KEY`):
+`scripts/try_durations.py` exercises the duration inference. The API key is read
+with Streamlit's native `st.secrets` (`TYPESAFE_API_KEY`):
 
 ```powershell
 uv run python scripts/try_workers.py
+uv run python scripts/try_durations.py
 ```
 
 ## Limitations

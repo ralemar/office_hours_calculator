@@ -61,17 +61,33 @@ worker from a user-provided list and aggregate hours per worker, using Jev
 - Unmatched/ambiguous names are listed separately for the warning
   (`[e["name"] for e in assigned if e["worker"] == "UNDETERMINED"]`).
 
+## Duration inference (Jev)
+
+- Users sometimes edit the event text (the `DESCRIPTION`, falling back to the
+  name) to state the hours to register, without changing start/end times.
+- `src/calendar_reader/durations.py`: `assign_durations(events, api_key)` asks
+  Jev two `Choice` questions per event:
+  - hours: whole hours, `0..12`.
+  - minutes: `0..60` in steps of 5.
+- It adds `inferred_hours` and `inferred_minutes` (ints) to each event. Shared
+  guidelines go in `state`; instructions only reference `event_text`.
+- On API failure, it warns and sets `0`/`0` for every event.
+
 ## Worker list input (web app)
 
 - `src/calendar_reader/workers.py`: `parse_workers(text) -> list[str]` splits by
   lines, strips, drops blanks and dedupes (order preserved).
 - `app/streamlit_app.py`: two uploaders (calendar + `workers.txt`), date range,
   and a "Scan events" button. On scan it reads the API key from
-  `st.secrets["TYPESAFE_API_KEY"]`, calls `assign_workers`, and stores the result
-  in `st.session_state`.
-- The events are shown in an editable `st.data_editor`: the `worker` column is
-  second (next to the name) and is a `SelectboxColumn` preselecting the inferred
-  worker, so the user can correct a wrong match. Only `worker` is editable.
+  `st.secrets["TYPESAFE_API_KEY"]`, calls `assign_workers` and `assign_durations`,
+  and stores the result in `st.session_state`.
+- The events are shown in an editable `st.data_editor` with columns `name`,
+  `worker`, `Duration (From title)` and `Duration (Event length)`. Durations are
+  formatted `3h 25m`: `From title` is the Jev-inferred duration
+  (`inferred_hours`/`inferred_minutes`), `Event length` is from the start/end
+  times (`duration_hours`). The `worker` column is a `SelectboxColumn`
+  preselecting the inferred worker, so the user can correct a wrong match; the
+  rest is read-only.
 - Totals come from the edited rows (`total_hours_by_person`), and the
   `UNDETERMINED` names are warned about.
 - No cookies and no extra dependency: the list is uploaded each session.

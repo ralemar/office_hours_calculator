@@ -42,6 +42,8 @@ def read_events(source: str | Path | bytes, date_from: date, date_to: date) -> l
         if _is_unavailable(name):
             continue
 
+        description = str(component.get("DESCRIPTION", "")).strip()
+
         start = dtstart.astimezone(MADRID)
         if start.date() < date_from or start.date() > date_to:
             continue
@@ -57,6 +59,7 @@ def read_events(source: str | Path | bytes, date_from: date, date_to: date) -> l
         events.append(
             {
                 "name": name,
+                "description": description,
                 "date": start.date(),
                 "start": start.time(),
                 "end": end,

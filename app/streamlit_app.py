@@ -4,8 +4,15 @@ import streamlit as st
 
 from calendar_reader.reader import read_events
 from calendar_reader.analytics import total_hours_by_person
+from calendar_reader.durations import assign_durations
 from calendar_reader.matching import UNDETERMINED, assign_workers
 from calendar_reader.workers import parse_workers
+
+
+def format_minutes(total_minutes: int) -> str:
+    hours, minutes = divmod(total_minutes, 60)
+    return f"{hours}h {minutes}m"
+
 
 st.set_page_config(page_title="ICS Calendar Reader")
 
@@ -43,21 +50,35 @@ if st.button("Scan events"):
         st.error("The 'From' date must be before or equal to the 'To' date.")
     else:
         events = read_events(uploaded.getvalue(), date_from, date_to)
-        st.session_state["assigned"] = assign_workers(events, workers, api_key)
+        assigned = assign_workers(events, workers, api_key)
+        st.session_state["assigned"] = assign_durations(assigned, api_key)
         st.session_state["scan_id"] = st.session_state.get("scan_id", 0) + 1
 
 assigned = st.session_state.get("assigned")
 if not assigned:
     st.info("Scan a calendar to list its events.")
 else:
-    columns = ["name", "worker", "date", "start", "end", "duration_hours"]
+    columns = ["name", "worker", "Duration (From title)", "Duration (Event length)"]
     options = list(
         dict.fromkeys(workers + [row["worker"] for row in assigned if row["worker"] != UNDETERMINED])
     )
     if UNDETERMINED not in options:
         options.append(UNDETERMINED)
+
+    display = [
+        {
+            "name": row["name"],
+            "worker": row["worker"],
+            "Duration (From title)": format_minutes(
+                row["inferred_hours"] * 60 + row["inferred_minutes"]
+            ),
+            "Duration (Event length)": format_minutes(round(row["duration_hours"] * 60)),
+        }
+        for row in assigned
+    ]
+
     edited = st.data_editor(
-        assigned,
+        display,
         hide_index=True,
         column_order=columns,
         column_config={
@@ -70,7 +91,11 @@ else:
         disabled=[name for name in columns if name != "worker"],
         key=f"events_editor_{st.session_state.get('scan_id', 0)}",
     )
-    rows = edited.to_dict("records") if hasattr(edited, "to_dict") else edited
+    edited_rows = edited.to_dict("records") if hasattr(edited, "to_dict") else edited
+    rows = [
+        {**original, "worker": edited_row["worker"]}
+        for original, edited_row in zip(assigned, edited_rows)
+    ]
 
     st.subheader("Hours per worker")
     st.dataframe(total_hours_by_person(rows))
